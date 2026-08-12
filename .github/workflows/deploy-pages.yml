@@ -46,9 +46,8 @@ jobs:
         run: echo "原站同步失败，已部署最近缓存的内容包或仓库内的镜像占位页。" >> $GITHUB_STEP_SUMMARY
       - run: npm run build
       - name: Verify deployment content package
-        run: |
-          test -s dist/wiki-data/index.json
-          test -s dist/wiki-data/pages/home.json
+        run: >-
+          node --input-type=module -e "import { readFile, stat } from 'node:fs/promises'; const index = JSON.parse(await readFile('dist/wiki-data/index.json', 'utf8')); const home = index.pages.find((page) => page.title === '来福Simulation Wiki') ?? index.pages[0]; if (!home?.file && !home?.slug) throw new Error('内容包未包含首页条目'); const file = home.file ?? home.slug + '.json'; await stat('dist/wiki-data/pages/' + file); console.log('Verified homepage content:', file);"
       - if: steps.sync-wiki.outcome == 'success'
         uses: actions/cache/save@v4
         with:

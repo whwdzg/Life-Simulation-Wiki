@@ -4,6 +4,7 @@ import { extname } from 'node:path'
 
 const api = 'https://lifesimulation.fandom.com/zh/api.php'
 const outputDirectory = new URL('../public/wiki-data/', import.meta.url)
+const pageDirectory = new URL('../public/wiki-data/pages/', import.meta.url)
 const mediaDirectory = new URL('../public/wiki-assets/', import.meta.url)
 
 const query = async (parameters) => {
@@ -38,6 +39,9 @@ const assetName = (name) => {
   const extension = extname(name).replace(/[^.a-z0-9]/gi, '').toLowerCase() || '.bin'
   return `${createHash('sha1').update(name).digest('hex')}${extension}`
 }
+
+const siteAsset = (assets, name) => assets[name] ? `./wiki-assets/${assets[name]}` : ''
+const plainText = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
 
 const replaceAttribute = (html, attribute, replace) => html.replace(new RegExp(`(${attribute}=["'])([^"']+)(["'])`, 'gi'), (_, start, value, end) => `${start}${replace(value)}${end}`)
 
@@ -97,6 +101,10 @@ const main = async () => {
   const pageMap = Object.fromEntries(articles.map((page) => [page.title, encodeURIComponent(page.title.replaceAll(' ', '_'))]))
   console.log(`Fetching ${articles.length} articles and downloading ${images.length} media files...`)
   const assets = await downloadAssets(images)
+  const site = {
+    background: siteAsset(assets, 'Site-background-light'),
+    icon: siteAsset(assets, 'Site-logo.png'),
+  }
   const content = []
   for (const [index, page] of articles.entries()) {
     const parsed = await query({ action: 'parse', page: page.title, prop: 'text|sections|displaytitle' })
@@ -112,7 +120,13 @@ const main = async () => {
   }
   await rm(outputDirectory, { recursive: true, force: true })
   await mkdir(outputDirectory, { recursive: true })
-  await writeFile(new URL('pages.json', outputDirectory), JSON.stringify({ generatedAt: new Date().toISOString(), pages: content }, null, 2))
+  await mkdir(pageDirectory, { recursive: true })
+  await Promise.all(content.map((page) => writeFile(new URL(`${page.slug}.json`, pageDirectory), JSON.stringify(page))))
+  const index = content.map(({ html, ...page }) => {
+    const text = plainText(html)
+    return { ...page, summary: text.slice(0, 180), searchText: text.slice(0, 4000) }
+  })
+  await writeFile(new URL('index.json', outputDirectory), JSON.stringify({ generatedAt: new Date().toISOString(), site, pages: index }))
   await writeFile(new URL('manifest.json', outputDirectory), JSON.stringify({ articles: articles.length, media: images.length }, null, 2))
   console.log(`Complete: ${articles.length} articles and ${images.length} media files migrated.`)
 }

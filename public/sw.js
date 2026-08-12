@@ -12,11 +12,16 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (request.method !== 'GET' || url.origin !== self.location.origin) return
 
-  event.respondWith(caches.match(request).then(async (cached) => {
-    const update = fetch(request).then((response) => {
-      if (response.ok) caches.open(cacheName).then((cache) => cache.put(request, response.clone()))
+  event.respondWith((async () => {
+    const cached = await caches.match(request)
+    const update = fetch(request).then(async (response) => {
+      if (response.ok) (await caches.open(cacheName)).put(request, response.clone())
       return response
     })
-    return cached ?? update
-  }).catch(() => cached ?? Response.error()))
+    if (cached) {
+      event.waitUntil(update.catch(() => undefined))
+      return cached
+    }
+    return update
+  })().catch(() => Response.error()))
 })

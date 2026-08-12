@@ -73,6 +73,7 @@ const pageFileName = (title) => `${createHash('sha1').update(title).digest('hex'
 
 const siteAsset = (assets, name) => assets[name] ? `./wiki-assets/${assets[name]}` : ''
 const plainText = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+const normalizeTitle = (title) => decodeURIComponent(title).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
 
 const replaceAttribute = (html, attribute, replace) => html.replace(new RegExp(`(${attribute}=["'])([^"']+)(["'])`, 'gi'), (_, start, value, end) => `${start}${replace(value)}${end}`)
 
@@ -107,8 +108,8 @@ const sanitizeHtml = (html, pages, assets, currentSlug) => {
   })
   content = content.replace(/\sdata-src=/gi, ' src=').replace(/\sclass=["']([^"']*)\blazyload\b([^"']*)["']/gi, ' class="$1$2"')
   content = content.replace(/href=["'](?:https?:\/\/lifesimulation\.fandom\.com)?\/zh\/wiki\/([^"'#?]+)(#[^"']*)?["']/gi, (_, rawTitle, hash = '') => {
-    const title = decodeURIComponent(rawTitle).replace(/_/g, ' ')
-    return pages[title] ? `href="#/wiki/${pages[title]}${hash}"` : 'href="#" class="unavailable-link"'
+    const slug = pages[normalizeTitle(rawTitle)]
+    return slug ? `href="#/wiki/${slug}${hash}"` : 'href="#" class="unavailable-link"'
   })
   content = content.replace(/href=["']#([^"']+)["']/gi, (_, anchor) => `href="#/wiki/${currentSlug}#${anchor}"`)
   return content
@@ -152,7 +153,10 @@ const main = async () => {
     getAll('allimages', 'ai'),
   ])
   const articles = pages.filter((page) => page.ns === 0)
-  const pageMap = Object.fromEntries(articles.map((page) => [page.title, encodeURIComponent(page.title.replaceAll(' ', '_'))]))
+  const pageMap = Object.fromEntries(articles.flatMap((page) => {
+    const slug = encodeURIComponent(page.title.replaceAll(' ', '_'))
+    return [[normalizeTitle(page.title), slug], [normalizeTitle(page.title.replaceAll(' ', '_')), slug]]
+  }))
   console.log(`Fetching ${articles.length} articles and downloading ${images.length} media files...`)
   await writeStatus({ state: 'running', phase: 'media', articles: { completed: 0, total: articles.length }, media: { completed: 0, total: images.length, failed: 0 } })
   const { assets, failed: failedMedia } = await downloadAssets(images, stagingMediaDirectory)
@@ -166,11 +170,11 @@ const main = async () => {
     const parse = parsed.parse
     const article = {
       title: page.title,
-      slug: pageMap[page.title],
+      slug: pageMap[normalizeTitle(page.title)],
       file: pageFileName(page.title),
       displayTitle: parse.displaytitle || page.title,
       sections: parse.sections.map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
-      html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[page.title]),
+      html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[normalizeTitle(page.title)]),
     }
     completedArticles += 1
     if (completedArticles % 5 === 0 || completedArticles === articles.length) {

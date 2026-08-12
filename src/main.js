@@ -14,6 +14,13 @@ const fallbackTheme = {
 
 const escapeHtml = (value) => value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character])
 const routeFor = (slug) => `#/wiki/${slug}`
+const decodeSlug = (slug) => {
+  try {
+    return decodeURIComponent(slug)
+  } catch {
+    return slug
+  }
+}
 
 const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, { cache: 'force-cache', ...options })
@@ -112,7 +119,7 @@ const start = async () => {
 
   const theme = applyTheme(source.site)
   const pages = source.pages
-  const pagesBySlug = new Map(pages.map((page) => [page.slug, page]))
+  const pagesBySlug = new Map(pages.flatMap((page) => [[page.slug, page], [decodeSlug(page.slug), page]]))
   const home = pages.find((page) => page.title === '来福Simulation Wiki') ?? pages[0]
   const pageList = pages.map((page) => `<a href="${routeFor(page.slug)}">${escapeHtml(page.title)}</a>`).join('')
   let renderVersion = 0
@@ -129,7 +136,7 @@ const start = async () => {
 
   const render = async () => {
     const requestedSlug = location.hash.match(/^#\/wiki\/([^#]+)/)?.[1]
-    const metadata = pagesBySlug.get(requestedSlug) ?? home
+    const metadata = pagesBySlug.get(requestedSlug) ?? pagesBySlug.get(decodeSlug(requestedSlug ?? '')) ?? home
     const version = ++renderVersion
     renderLoading('正在加载页面', `正在打开“${escapeHtml(metadata.title)}”。`)
     let page

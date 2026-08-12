@@ -11,6 +11,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
   if (request.method !== 'GET' || url.origin !== self.location.origin) return
+  if (url.pathname.endsWith('/wiki-data/sync-status.json')) return
 
   event.respondWith((async () => {
     const cached = await caches.match(request)

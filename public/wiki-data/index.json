@@ -1,6 +1,12 @@
 {
   "generatedAt": null,
   "site": {},
+  "sync": {
+    "state": "pending",
+    "phase": "waiting",
+    "articles": { "completed": 0, "total": 0 },
+    "media": { "completed": 0, "total": 0, "failed": 0 }
+  },
   "pages": [
     {
       "title": "来福Simulation Wiki（镜像站）",

@@ -3,6 +3,7 @@ import './style.css'
 const baseUrl = import.meta.env.BASE_URL
 const indexUrl = `${baseUrl}wiki-data/index.json`
 const pageUrl = (slug) => `${baseUrl}wiki-data/pages/${slug}.json`
+const statusUrl = `${baseUrl}wiki-data/sync-status.json`
 const app = document.querySelector('#app')
 const fallbackTheme = {
   background: 'https://static.wikia.nocookie.net/lifesimulation/images/b/b5/Site-background-light/revision/latest?cb=20251002115419&path-prefix=zh',
@@ -12,8 +13,8 @@ const fallbackTheme = {
 const escapeHtml = (value) => value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character])
 const routeFor = (slug) => `#/wiki/${slug}`
 
-const fetchJson = async (url) => {
-  const response = await fetch(url, { cache: 'force-cache' })
+const fetchJson = async (url, options = {}) => {
+  const response = await fetch(url, { cache: 'force-cache', ...options })
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
   return response.json()
 }
@@ -31,6 +32,23 @@ const renderLoading = (title = '正在加载页面', message = '正在获取 Wik
 
 const renderFailure = (message) => {
   app.innerHTML = `<main class="load-state"><h1>来福Simulation Wiki（镜像站）</h1><p>${message}</p><p>请稍后刷新页面重试。</p></main>`
+}
+
+const formatTime = (value) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium', hour12: false }).format(new Date(value)) : '尚未完成首次抓取'
+
+const syncPanel = (sync = {}) => {
+  const articles = sync.articles ?? { completed: 0, total: 0 }
+  const media = sync.media ?? { completed: 0, total: 0, failed: 0 }
+  if (sync.state === 'failed') {
+    return `<section class="sync-status is-error"><h2>镜像抓取失败</h2><p>最近一次抓取未能完成：${escapeHtml(sync.error || '未知错误')}</p><p>当前页面继续展示上一次可用内容，系统会在下一个整点后 17 分再次尝试。</p></section>`
+  }
+  if (sync.state === 'running') {
+    return `<section class="sync-status is-running"><h2>镜像正在抓取</h2><p>当前阶段：${escapeHtml(sync.phase || '处理中')}。文章 ${articles.completed}/${articles.total}，媒体 ${media.completed}/${media.total}${media.failed ? `，失败 ${media.failed}` : ''}。</p><p>静态镜像将在本次抓取完成并发布后更新。</p></section>`
+  }
+  if (sync.state === 'success') {
+    return `<section class="sync-status is-success"><h2>镜像抓取信息</h2><p>最近抓取时间：<time datetime="${sync.capturedAt}">${formatTime(sync.capturedAt)}</time></p><p>已同步 ${articles.completed}/${articles.total} 篇文章与 ${media.completed}/${media.total} 个媒体文件${media.failed ? `，其中 ${media.failed} 个媒体文件未能下载` : ''}。</p></section>`
+  }
+  return '<section class="sync-status"><h2>镜像抓取状态</h2><p>正在等待首次原站抓取。GitHub Actions 会在每小时的第 17 分执行同步。</p></section>'
 }
 
 const pageFragment = (page, isHome) => {
@@ -83,6 +101,13 @@ const start = async () => {
     return
   }
 
+  let sync = source.sync
+  try {
+    sync = await fetchJson(statusUrl, { cache: 'no-store' })
+  } catch {
+    // Use the status embedded in the index when an older deployment lacks a separate status file.
+  }
+
   const theme = applyTheme(source.site)
   const pages = source.pages
   const pagesBySlug = new Map(pages.map((page) => [page.slug, page]))
@@ -115,14 +140,15 @@ const start = async () => {
     if (version !== renderVersion) return
 
     const toc = page.sections.filter((section) => Number(section.level) <= 3).map((section) => `<a class="toc-level-${section.level}" href="${routeFor(page.slug)}#${section.anchor}">${section.line}</a>`).join('')
-    const { articleHtml, quoteHtml } = pageFragment(page, metadata === home)
+    const isHome = metadata.slug === home.slug
+    const { articleHtml, quoteHtml } = pageFragment(page, isHome)
     const outline = toc || '<span>本页没有目录</span>'
     document.title = `${page.title} | 来福Simulation Wiki（镜像站）`
     app.innerHTML = `
       <header class="wiki-header"><a class="wiki-brand" href="${routeFor(home.slug)}"><img class="wiki-brand-logo" src="${theme.icon}" alt="来福Simulation 标志"><span>来福Simulation Wiki（镜像站）</span></a><button class="mobile-toc-button" type="button" aria-expanded="false">目录</button><nav><a href="${routeFor(home.slug)}">首页</a><button class="all-pages-button" type="button" aria-expanded="false">全部条目</button></nav><form class="wiki-search" role="search"><label class="sr-only" for="wiki-search-input">搜索 Wiki</label><input id="wiki-search-input" type="search" placeholder="搜索这个镜像站"><button type="submit" aria-label="搜索">⌕</button></form></header>
       <div class="wiki-drawer" hidden><div class="drawer-head"><strong>全部条目（${pages.length}）</strong><button class="close-drawer" type="button" aria-label="关闭">×</button></div><div class="page-list">${pageList}</div></div>
       <aside class="mobile-toc-drawer" hidden aria-label="本页目录"><div class="drawer-head"><strong>本页目录</strong><button class="close-mobile-toc" type="button" aria-label="关闭目录">×</button></div><nav>${outline}</nav></aside>
-      <main class="wiki-shell"><article class="wiki-article"><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki 镜像站</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div><footer class="article-license">本页为来福Simulation Wiki 的静态镜像，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 镜像条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回镜像首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
+      <main class="wiki-shell"><article class="wiki-article"><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki 镜像站</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div>${isHome ? syncPanel(sync) : ''}<footer class="article-license">本页为来福Simulation Wiki 的静态镜像，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 镜像条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回镜像首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
       <dialog id="search-dialog"><button class="dialog-close" type="button" aria-label="关闭">×</button><h2>搜索 Wiki</h2><form class="dialog-search"><input type="search" placeholder="输入关键词" autofocus><button type="submit">搜索</button></form><div id="search-results"></div></dialog>`
 
     const drawer = document.querySelector('.wiki-drawer')

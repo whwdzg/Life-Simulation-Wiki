@@ -6,8 +6,14 @@ const api = 'https://lifesimulation.fandom.com/zh/api.php'
 const outputDirectory = new URL('../public/wiki-data/', import.meta.url)
 const pageDirectory = new URL('../public/wiki-data/pages/', import.meta.url)
 const mediaDirectory = new URL('../public/wiki-assets/', import.meta.url)
+const statusFile = new URL('../public/wiki-data/sync-status.json', import.meta.url)
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+const timestamp = () => new Date().toISOString()
+const writeStatus = async (status) => {
+  await mkdir(outputDirectory, { recursive: true })
+  await writeFile(statusFile, JSON.stringify({ updatedAt: timestamp(), ...status }, null, 2))
+}
 
 const fetchWithRetry = async (url, options = {}) => {
   let lastError
@@ -106,6 +112,8 @@ const sanitizeHtml = (html, pages, assets, currentSlug) => {
 
 const downloadAssets = async (images) => {
   const assets = Object.fromEntries(images.map((image) => [image.name, assetName(image.name)]))
+  let completed = 0
+  let failed = 0
   await rm(mediaDirectory, { recursive: true, force: true })
   await mkdir(mediaDirectory, { recursive: true })
   const queue = [...images]
@@ -118,15 +126,22 @@ const downloadAssets = async (images) => {
         if (!response.ok) throw new Error(String(response.status))
         await writeFile(destination, new Uint8Array(await response.arrayBuffer()))
       } catch (error) {
+        failed += 1
         console.warn(`Skipped asset: ${image.name} (${error.message})`)
+      } finally {
+        completed += 1
+        if (completed % 20 === 0 || completed === images.length) {
+          await writeStatus({ state: 'running', phase: 'media', articles: { completed: 0, total: 0 }, media: { completed, total: images.length, failed } })
+        }
       }
     }
   })
   await Promise.all(workers)
-  return assets
+  return { assets, failed }
 }
 
 const main = async () => {
+  await writeStatus({ state: 'running', phase: 'index', articles: { completed: 0, total: 0 }, media: { completed: 0, total: 0, failed: 0 } })
   console.log('Fetching page and media indexes...')
   const [pages, images] = await Promise.all([
     getAll('allpages', 'ap'),
@@ -135,11 +150,13 @@ const main = async () => {
   const articles = pages.filter((page) => page.ns === 0)
   const pageMap = Object.fromEntries(articles.map((page) => [page.title, encodeURIComponent(page.title.replaceAll(' ', '_'))]))
   console.log(`Fetching ${articles.length} articles and downloading ${images.length} media files...`)
-  const assets = await downloadAssets(images)
+  await writeStatus({ state: 'running', phase: 'media', articles: { completed: 0, total: articles.length }, media: { completed: 0, total: images.length, failed: 0 } })
+  const { assets, failed: failedMedia } = await downloadAssets(images)
   const site = {
     background: siteAsset(assets, 'Site-background-light'),
     icon: siteAsset(assets, 'Site-logo.png'),
   }
+  let completedArticles = 0
   const content = await mapConcurrent(articles, 8, async (page, index) => {
     const parsed = await query({ action: 'parse', page: page.title, prop: 'text|sections|displaytitle' })
     const parse = parsed.parse
@@ -149,6 +166,10 @@ const main = async () => {
       displayTitle: parse.displaytitle || page.title,
       sections: parse.sections.map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
       html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[page.title]),
+    }
+    completedArticles += 1
+    if (completedArticles % 5 === 0 || completedArticles === articles.length) {
+      await writeStatus({ state: 'running', phase: 'articles', articles: { completed: completedArticles, total: articles.length }, media: { completed: images.length, total: images.length, failed: failedMedia } })
     }
     console.log(`[${index + 1}/${articles.length}] ${page.title}`)
     return article
@@ -161,9 +182,15 @@ const main = async () => {
     const text = plainText(html)
     return { ...page, summary: text.slice(0, 180), searchText: text.slice(0, 4000) }
   })
-  await writeFile(new URL('index.json', outputDirectory), JSON.stringify({ generatedAt: new Date().toISOString(), site, pages: index }))
-  await writeFile(new URL('manifest.json', outputDirectory), JSON.stringify({ articles: articles.length, media: images.length }, null, 2))
+  const status = { state: 'success', phase: 'complete', capturedAt: timestamp(), articles: { completed: articles.length, total: articles.length }, media: { completed: images.length, total: images.length, failed: failedMedia } }
+  await writeFile(new URL('index.json', outputDirectory), JSON.stringify({ generatedAt: status.capturedAt, site, sync: status, pages: index }))
+  await writeFile(new URL('manifest.json', outputDirectory), JSON.stringify({ articles: articles.length, media: images.length, failedMedia, capturedAt: status.capturedAt }, null, 2))
+  await writeStatus(status)
   console.log(`Complete: ${articles.length} articles and ${images.length} media files migrated.`)
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1 })
+main().catch(async (error) => {
+  console.error(error)
+  await writeStatus({ state: 'failed', phase: 'error', error: error.message, articles: { completed: 0, total: 0 }, media: { completed: 0, total: 0, failed: 0 } })
+  process.exitCode = 1
+})

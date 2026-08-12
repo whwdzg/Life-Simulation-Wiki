@@ -41,7 +41,7 @@ const assetName = (name) => {
 
 const replaceAttribute = (html, attribute, replace) => html.replace(new RegExp(`(${attribute}=["'])([^"']+)(["'])`, 'gi'), (_, start, value, end) => `${start}${replace(value)}${end}`)
 
-const sanitizeHtml = (html, pages, assets) => {
+const sanitizeHtml = (html, pages, assets, currentSlug) => {
   let content = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -61,6 +61,7 @@ const sanitizeHtml = (html, pages, assets) => {
     const title = decodeURIComponent(rawTitle).replace(/_/g, ' ')
     return pages[title] ? `href="#/wiki/${pages[title]}${hash}"` : 'href="#" class="unavailable-link"'
   })
+  content = content.replace(/href=["']#([^"']+)["']/gi, (_, anchor) => `href="#/wiki/${currentSlug}#${anchor}"`)
   return content
 }
 
@@ -105,7 +106,7 @@ const main = async () => {
       slug: pageMap[page.title],
       displayTitle: parse.displaytitle || page.title,
       sections: parse.sections.map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
-      html: sanitizeHtml(parse.text['*'], pageMap, assets),
+      html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[page.title]),
     })
     console.log(`[${index + 1}/${articles.length}] ${page.title}`)
   }

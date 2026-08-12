@@ -45,6 +45,10 @@ jobs:
       - if: steps.sync-wiki.outcome == 'failure'
         run: echo "原站同步失败，已部署最近缓存的内容包或仓库内的镜像占位页。" >> $GITHUB_STEP_SUMMARY
       - run: npm run build
+      - name: Verify deployment content package
+        run: |
+          test -s dist/wiki-data/index.json
+          test -s dist/wiki-data/pages/home.json
       - if: steps.sync-wiki.outcome == 'success'
         uses: actions/cache/save@v4
         with:

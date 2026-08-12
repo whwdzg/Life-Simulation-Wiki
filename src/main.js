@@ -4,7 +4,7 @@ window.__lifeSimulationWikiStarted = true
 
 const baseUrl = import.meta.env.BASE_URL
 const indexUrl = `${baseUrl}wiki-data/index.json`
-const pageUrl = (slug) => `${baseUrl}wiki-data/pages/${slug}.json`
+const pageUrl = (page) => `${baseUrl}wiki-data/pages/${page.file ?? `${page.slug}.json`}`
 const statusUrl = `${baseUrl}wiki-data/sync-status.json`
 const app = document.querySelector('#app')
 const fallbackTheme = {
@@ -134,7 +134,7 @@ const start = async () => {
     renderLoading('正在加载页面', `正在打开“${escapeHtml(metadata.title)}”。`)
     let page
     try {
-      page = await fetchJson(pageUrl(metadata.slug))
+      page = await fetchJson(pageUrl(metadata))
     } catch (error) {
       if (version === renderVersion) renderFailure(`无法加载“${escapeHtml(metadata.title)}”（${escapeHtml(error.message)}）。`)
       return

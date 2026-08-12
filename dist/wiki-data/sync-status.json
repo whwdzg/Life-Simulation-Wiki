@@ -1,0 +1,6 @@
+{
+  "state": "pending",
+  "phase": "waiting",
+  "articles": { "completed": 0, "total": 0 },
+  "media": { "completed": 0, "total": 0, "failed": 0 }
+}

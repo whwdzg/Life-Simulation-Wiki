@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 
 const api = 'https://lifesimulation.fandom.com/zh/api.php'
 const outputDirectory = new URL('../public/wiki-data/', import.meta.url)
-const pageDirectory = new URL('../public/wiki-data/pages/', import.meta.url)
 const mediaDirectory = new URL('../public/wiki-assets/', import.meta.url)
+const stagingOutputDirectory = new URL('../public/wiki-data-staging/', import.meta.url)
+const stagingPageDirectory = new URL('../public/wiki-data-staging/pages/', import.meta.url)
+const stagingMediaDirectory = new URL('../public/wiki-assets-staging/', import.meta.url)
 const statusFile = new URL('../public/wiki-data/sync-status.json', import.meta.url)
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -67,6 +69,8 @@ const assetName = (name) => {
   return `${createHash('sha1').update(name).digest('hex')}${extension}`
 }
 
+const pageFileName = (title) => `${createHash('sha1').update(title).digest('hex')}.json`
+
 const siteAsset = (assets, name) => assets[name] ? `./wiki-assets/${assets[name]}` : ''
 const plainText = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
 
@@ -110,17 +114,17 @@ const sanitizeHtml = (html, pages, assets, currentSlug) => {
   return content
 }
 
-const downloadAssets = async (images) => {
+const downloadAssets = async (images, targetDirectory) => {
   const assets = Object.fromEntries(images.map((image) => [image.name, assetName(image.name)]))
   let completed = 0
   let failed = 0
-  await rm(mediaDirectory, { recursive: true, force: true })
-  await mkdir(mediaDirectory, { recursive: true })
+  await rm(targetDirectory, { recursive: true, force: true })
+  await mkdir(targetDirectory, { recursive: true })
   const queue = [...images]
   const workers = Array.from({ length: 6 }, async () => {
     while (queue.length) {
       const image = queue.shift()
-      const destination = new URL(assets[image.name], mediaDirectory)
+      const destination = new URL(assets[image.name], targetDirectory)
       try {
         const response = await fetchWithRetry(image.url, { headers: { 'user-agent': 'Life-Simulation-Wiki static migration' } })
         if (!response.ok) throw new Error(String(response.status))
@@ -151,7 +155,7 @@ const main = async () => {
   const pageMap = Object.fromEntries(articles.map((page) => [page.title, encodeURIComponent(page.title.replaceAll(' ', '_'))]))
   console.log(`Fetching ${articles.length} articles and downloading ${images.length} media files...`)
   await writeStatus({ state: 'running', phase: 'media', articles: { completed: 0, total: articles.length }, media: { completed: 0, total: images.length, failed: 0 } })
-  const { assets, failed: failedMedia } = await downloadAssets(images)
+  const { assets, failed: failedMedia } = await downloadAssets(images, stagingMediaDirectory)
   const site = {
     background: siteAsset(assets, 'Site-background-light'),
     icon: siteAsset(assets, 'Site-logo.png'),
@@ -163,6 +167,7 @@ const main = async () => {
     const article = {
       title: page.title,
       slug: pageMap[page.title],
+      file: pageFileName(page.title),
       displayTitle: parse.displaytitle || page.title,
       sections: parse.sections.map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
       html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[page.title]),
@@ -174,17 +179,21 @@ const main = async () => {
     console.log(`[${index + 1}/${articles.length}] ${page.title}`)
     return article
   })
-  await rm(outputDirectory, { recursive: true, force: true })
-  await mkdir(outputDirectory, { recursive: true })
-  await mkdir(pageDirectory, { recursive: true })
-  await Promise.all(content.map((page) => writeFile(new URL(`${page.slug}.json`, pageDirectory), JSON.stringify(page))))
+  await rm(stagingOutputDirectory, { recursive: true, force: true })
+  await mkdir(stagingOutputDirectory, { recursive: true })
+  await mkdir(stagingPageDirectory, { recursive: true })
+  await Promise.all(content.map((page) => writeFile(new URL(page.file, stagingPageDirectory), JSON.stringify(page))))
   const index = content.map(({ html, ...page }) => {
     const text = plainText(html)
     return { ...page, summary: text.slice(0, 180), searchText: text.slice(0, 4000) }
   })
   const status = { state: 'success', phase: 'complete', capturedAt: timestamp(), articles: { completed: articles.length, total: articles.length }, media: { completed: images.length, total: images.length, failed: failedMedia } }
-  await writeFile(new URL('index.json', outputDirectory), JSON.stringify({ generatedAt: status.capturedAt, site, sync: status, pages: index }))
-  await writeFile(new URL('manifest.json', outputDirectory), JSON.stringify({ articles: articles.length, media: images.length, failedMedia, capturedAt: status.capturedAt }, null, 2))
+  await writeFile(new URL('index.json', stagingOutputDirectory), JSON.stringify({ generatedAt: status.capturedAt, site, sync: status, pages: index }))
+  await writeFile(new URL('manifest.json', stagingOutputDirectory), JSON.stringify({ articles: articles.length, media: images.length, failedMedia, capturedAt: status.capturedAt }, null, 2))
+  await rm(outputDirectory, { recursive: true, force: true })
+  await rm(mediaDirectory, { recursive: true, force: true })
+  await rename(stagingOutputDirectory, outputDirectory)
+  await rename(stagingMediaDirectory, mediaDirectory)
   await writeStatus(status)
   console.log(`Complete: ${articles.length} articles and ${images.length} media files migrated.`)
 }

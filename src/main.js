@@ -13,13 +13,17 @@ const fallbackTheme = {
 }
 
 const escapeHtml = (value) => value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character])
-const routeFor = (slug) => `#/wiki/${slug}`
 const decodeSlug = (slug) => {
   try {
     return decodeURIComponent(slug)
   } catch {
     return slug
   }
+}
+const routeFor = (slug, fragment = '') => {
+  const root = new URL(baseUrl, window.location.href).href
+  const anchor = fragment ? `#${encodeURIComponent(decodeSlug(fragment))}` : ''
+  return `${root}#/wiki/${slug}${anchor}`
 }
 
 const fetchJson = async (url, options = {}) => {
@@ -85,7 +89,24 @@ const prepareImages = (container) => {
 const scrollToFragment = () => {
   const fragment = location.hash.match(/^#\/wiki\/[^#]+#(.+)$/)?.[1]
   if (!fragment) return
-  requestAnimationFrame(() => document.getElementById(decodeURIComponent(fragment))?.scrollIntoView({ block: 'start' }))
+  requestAnimationFrame(() => document.getElementById(decodeURIComponent(fragment))?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+}
+
+const normalizeWikiLinks = (container) => {
+  container.querySelectorAll('a[href]').forEach((anchor) => {
+    const href = anchor.getAttribute('href')
+    const match = href?.match(/^#\/wiki\/([^#]+)(?:#(.+))?$/)
+    if (!match) return
+    const [, slug, fragment = ''] = match
+    anchor.href = routeFor(slug, fragment)
+    anchor.dataset.wikiSlug = slug
+    if (fragment) anchor.dataset.scrollTarget = decodeSlug(fragment)
+  })
+}
+
+const scrollWithinPage = (slug, target) => {
+  history.replaceState(null, '', routeFor(slug, target))
+  document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 const renderTabbers = () => {
@@ -148,7 +169,7 @@ const start = async () => {
     }
     if (version !== renderVersion) return
 
-    const toc = page.sections.filter((section) => Number(section.level) <= 3).map((section) => `<a class="toc-level-${section.level}" href="${routeFor(page.slug)}#${section.anchor}">${section.line}</a>`).join('')
+    const toc = page.sections.filter((section) => Number(section.level) <= 3).map((section) => `<a class="toc-level-${section.level}" data-wiki-slug="${page.slug}" data-scroll-target="${escapeHtml(section.anchor)}" href="${routeFor(page.slug, section.anchor)}">${section.line}</a>`).join('')
     const isHome = metadata.slug === home.slug
     const { articleHtml, quoteHtml } = pageFragment(page, isHome)
     const outline = toc || '<span>本页没有目录</span>'
@@ -181,14 +202,19 @@ const start = async () => {
     document.querySelector('.dialog-search').addEventListener('submit', (event) => { event.preventDefault(); showSearch(event.currentTarget.querySelector('input').value) })
     document.querySelector('.dialog-close').addEventListener('click', () => searchDialog.close())
     const article = document.querySelector('.wiki-article')
-    article.addEventListener('click', (event) => {
+    normalizeWikiLinks(article)
+    const handlePageNavigation = (event) => {
       const anchor = event.target.closest('a[href]')
-      const href = anchor?.getAttribute('href')
-      if (href?.startsWith('#') && href !== '#' && !href.startsWith('#/wiki/')) {
+      if (!anchor) return
+      const target = anchor.dataset.scrollTarget
+      if (target && decodeSlug(anchor.dataset.wikiSlug) === decodeSlug(page.slug)) {
         event.preventDefault()
-        location.hash = `${routeFor(page.slug)}${href}`
+        scrollWithinPage(page.slug, target)
       }
-    })
+    }
+    article.addEventListener('click', handlePageNavigation)
+    mobileToc.addEventListener('click', handlePageNavigation)
+    document.querySelector('.wiki-sidebar').addEventListener('click', handlePageNavigation)
     prepareImages(article)
     renderTabbers()
     scrollToFragment()

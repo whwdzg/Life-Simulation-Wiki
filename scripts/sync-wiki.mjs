@@ -7,10 +7,31 @@ const outputDirectory = new URL('../public/wiki-data/', import.meta.url)
 const pageDirectory = new URL('../public/wiki-data/pages/', import.meta.url)
 const mediaDirectory = new URL('../public/wiki-assets/', import.meta.url)
 
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+const fetchWithRetry = async (url, options = {}) => {
+  let lastError
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30_000)
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal })
+      if (response.ok || (response.status >= 400 && response.status < 500)) return response
+      throw new Error(`${response.status} ${response.statusText}`)
+    } catch (error) {
+      lastError = error
+      if (attempt < 3) await wait(750 * (attempt + 1))
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+  throw lastError
+}
+
 const query = async (parameters) => {
   const url = new URL(api)
   Object.entries({ format: 'json', origin: '*', ...parameters }).forEach(([key, value]) => url.searchParams.set(key, value))
-  const response = await fetch(url, { headers: { 'user-agent': 'Life-Simulation-Wiki static migration' } })
+  const response = await fetchWithRetry(url, { headers: { 'user-agent': 'Life-Simulation-Wiki static migration' } })
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${url}`)
   return response.json()
 }
@@ -44,6 +65,20 @@ const siteAsset = (assets, name) => assets[name] ? `./wiki-assets/${assets[name]
 const plainText = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
 
 const replaceAttribute = (html, attribute, replace) => html.replace(new RegExp(`(${attribute}=["'])([^"']+)(["'])`, 'gi'), (_, start, value, end) => `${start}${replace(value)}${end}`)
+
+const mapConcurrent = async (items, limit, mapper) => {
+  const results = new Array(items.length)
+  let nextIndex = 0
+  const workers = Array.from({ length: limit }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index], index)
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
 
 const sanitizeHtml = (html, pages, assets, currentSlug) => {
   let content = html
@@ -79,7 +114,7 @@ const downloadAssets = async (images) => {
       const image = queue.shift()
       const destination = new URL(assets[image.name], mediaDirectory)
       try {
-        const response = await fetch(image.url, { headers: { 'user-agent': 'Life-Simulation-Wiki static migration' } })
+        const response = await fetchWithRetry(image.url, { headers: { 'user-agent': 'Life-Simulation-Wiki static migration' } })
         if (!response.ok) throw new Error(String(response.status))
         await writeFile(destination, new Uint8Array(await response.arrayBuffer()))
       } catch (error) {
@@ -105,19 +140,19 @@ const main = async () => {
     background: siteAsset(assets, 'Site-background-light'),
     icon: siteAsset(assets, 'Site-logo.png'),
   }
-  const content = []
-  for (const [index, page] of articles.entries()) {
+  const content = await mapConcurrent(articles, 8, async (page, index) => {
     const parsed = await query({ action: 'parse', page: page.title, prop: 'text|sections|displaytitle' })
     const parse = parsed.parse
-    content.push({
+    const article = {
       title: page.title,
       slug: pageMap[page.title],
       displayTitle: parse.displaytitle || page.title,
       sections: parse.sections.map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
       html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[page.title]),
-    })
+    }
     console.log(`[${index + 1}/${articles.length}] ${page.title}`)
-  }
+    return article
+  })
   await rm(outputDirectory, { recursive: true, force: true })
   await mkdir(outputDirectory, { recursive: true })
   await mkdir(pageDirectory, { recursive: true })

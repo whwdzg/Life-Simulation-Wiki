@@ -30,7 +30,7 @@ const renderLoading = (title = '正在加载页面', message = '正在获取 Wik
 }
 
 const renderFailure = (message) => {
-  app.innerHTML = `<main class="load-state"><h1>来福Simulation Wiki</h1><p>${message}</p><p>请稍后刷新页面重试。</p></main>`
+  app.innerHTML = `<main class="load-state"><h1>来福Simulation Wiki（镜像站）</h1><p>${message}</p><p>请稍后刷新页面重试。</p></main>`
 }
 
 const pageFragment = (page, isHome) => {
@@ -114,14 +114,15 @@ const start = async () => {
     }
     if (version !== renderVersion) return
 
-    const toc = page.sections.filter((section) => Number(section.level) <= 3).map((section) => `<a class="toc-level-${section.level}" href="#${section.anchor}">${section.line}</a>`).join('')
+    const toc = page.sections.filter((section) => Number(section.level) <= 3).map((section) => `<a class="toc-level-${section.level}" href="${routeFor(page.slug)}#${section.anchor}">${section.line}</a>`).join('')
     const { articleHtml, quoteHtml } = pageFragment(page, metadata === home)
     const outline = toc || '<span>本页没有目录</span>'
-    document.title = `${page.title} | 来福Simulation Wiki`
+    document.title = `${page.title} | 来福Simulation Wiki（镜像站）`
     app.innerHTML = `
-      <header class="wiki-header"><a class="wiki-brand" href="${routeFor(home.slug)}"><img class="wiki-brand-logo" src="${theme.icon}" alt="来福Simulation 标志"><span>来福Simulation Wiki</span></a><nav><a href="${routeFor(home.slug)}">首页</a><button class="all-pages-button" type="button" aria-expanded="false">全部条目</button></nav><form class="wiki-search" role="search"><label class="sr-only" for="wiki-search-input">搜索 Wiki</label><input id="wiki-search-input" type="search" placeholder="搜索这个 Wiki"><button type="submit" aria-label="搜索">⌕</button></form></header>
+      <header class="wiki-header"><a class="wiki-brand" href="${routeFor(home.slug)}"><img class="wiki-brand-logo" src="${theme.icon}" alt="来福Simulation 标志"><span>来福Simulation Wiki（镜像站）</span></a><button class="mobile-toc-button" type="button" aria-expanded="false">目录</button><nav><a href="${routeFor(home.slug)}">首页</a><button class="all-pages-button" type="button" aria-expanded="false">全部条目</button></nav><form class="wiki-search" role="search"><label class="sr-only" for="wiki-search-input">搜索 Wiki</label><input id="wiki-search-input" type="search" placeholder="搜索这个镜像站"><button type="submit" aria-label="搜索">⌕</button></form></header>
       <div class="wiki-drawer" hidden><div class="drawer-head"><strong>全部条目（${pages.length}）</strong><button class="close-drawer" type="button" aria-label="关闭">×</button></div><div class="page-list">${pageList}</div></div>
-      <main class="wiki-shell"><article class="wiki-article"><details class="mobile-outline"><summary>本页目录</summary><nav>${outline}</nav></details><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div><footer class="article-license">本页内容迁移自来福Simulation Wiki，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
+      <aside class="mobile-toc-drawer" hidden aria-label="本页目录"><div class="drawer-head"><strong>本页目录</strong><button class="close-mobile-toc" type="button" aria-label="关闭目录">×</button></div><nav>${outline}</nav></aside>
+      <main class="wiki-shell"><article class="wiki-article"><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki 镜像站</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div><footer class="article-license">本页为来福Simulation Wiki 的静态镜像，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 镜像条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回镜像首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
       <dialog id="search-dialog"><button class="dialog-close" type="button" aria-label="关闭">×</button><h2>搜索 Wiki</h2><form class="dialog-search"><input type="search" placeholder="输入关键词" autofocus><button type="submit">搜索</button></form><div id="search-results"></div></dialog>`
 
     const drawer = document.querySelector('.wiki-drawer')
@@ -132,6 +133,14 @@ const start = async () => {
       drawerButton.setAttribute('aria-expanded', String(open))
     })
     document.querySelector('.close-drawer').addEventListener('click', () => { drawer.hidden = true; drawerButton.setAttribute('aria-expanded', 'false') })
+    const mobileToc = document.querySelector('.mobile-toc-drawer')
+    const mobileTocButton = document.querySelector('.mobile-toc-button')
+    mobileTocButton.addEventListener('click', () => {
+      const open = mobileToc.hidden
+      mobileToc.hidden = !open
+      mobileTocButton.setAttribute('aria-expanded', String(open))
+    })
+    document.querySelector('.close-mobile-toc').addEventListener('click', () => { mobileToc.hidden = true; mobileTocButton.setAttribute('aria-expanded', 'false') })
     const searchDialog = document.querySelector('#search-dialog')
     document.querySelector('.wiki-search').addEventListener('submit', (event) => { event.preventDefault(); searchDialog.showModal(); const field = document.querySelector('.dialog-search input'); field.value = document.querySelector('#wiki-search-input').value; showSearch(field.value); field.focus() })
     document.querySelector('.dialog-search').addEventListener('submit', (event) => { event.preventDefault(); showSearch(event.currentTarget.querySelector('input').value) })

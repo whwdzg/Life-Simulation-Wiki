@@ -1,4 +1,4 @@
-const cacheName = 'life-simulation-wiki-v1'
+const cacheName = 'life-simulation-wiki-v2'
 
 self.addEventListener('install', () => self.skipWaiting())
 

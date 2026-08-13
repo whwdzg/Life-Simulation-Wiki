@@ -75,13 +75,35 @@ const pageFragment = (page, isHome) => {
 }
 
 const prepareImages = (container) => {
-  container.querySelectorAll('img').forEach((image) => {
-    const finish = () => image.classList.remove('image-loading')
+  container.querySelectorAll('img').forEach((image, index) => {
+    const finish = () => {
+      image.classList.remove('image-loading', 'image-failed')
+      image.closest('figure, .thumb, .image')?.classList.remove('image-loading')
+    }
+    const fallback = () => {
+      const source = image.dataset.sourceUrl
+      if (source && image.currentSrc !== source) {
+        image.removeAttribute('data-source-url')
+        image.addEventListener('error', fallback, { once: true })
+        image.src = source
+        return
+      }
+      image.classList.remove('image-loading')
+      image.classList.add('image-failed')
+    }
+    if (index === 0) {
+      image.loading = 'eager'
+      image.fetchPriority = 'high'
+    } else {
+      image.loading = 'lazy'
+      image.decoding = 'async'
+    }
     image.classList.add('image-loading')
-    if (image.complete) finish()
+    image.closest('figure, .thumb, .image')?.classList.add('image-loading')
+    if (image.complete && image.naturalWidth > 0) finish()
     else {
       image.addEventListener('load', finish, { once: true })
-      image.addEventListener('error', finish, { once: true })
+      image.addEventListener('error', fallback, { once: true })
     }
   })
 }

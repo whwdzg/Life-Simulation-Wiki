@@ -98,20 +98,26 @@ const sanitizeHtml = (html, pages, assets, currentSlug) => {
     .replace(/<div[^>]*class=["'][^"']*(?:fandom-ad|portable-infobox|mw-editsection)[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '')
     .replace(/<fandom-ad\b[^>]*>[\s\S]*?<\/fandom-ad>/gi, '')
     .replace(/\s(?:on\w+|data-tracking-label)=["'][^"']*["']/gi, '')
+  content = content.replace(/<img\b([^>]*?)\ssrc=(["'])data:image\/[^"']*\2([^>]*)>/gi, (tag, before, quote, after) => {
+    return /\sdata-src=/.test(after) ? `<img${before}${after}>` : tag
+  })
   content = replaceAttribute(content, 'data-src', (value) => {
     const name = mediaName(value)
-    return name && assets[name] ? `./wiki-assets/${assets[name]}` : value
+    return name && assets[name] ? `./wiki-assets/${assets[name]}" data-source-url="${value}` : value
   })
   content = replaceAttribute(content, 'src', (value) => {
     const name = mediaName(value)
-    return name && assets[name] ? `./wiki-assets/${assets[name]}` : value
+    return name && assets[name] ? `./wiki-assets/${assets[name]}" data-source-url="${value}` : value
   })
-  content = content.replace(/\sdata-src=/gi, ' src=').replace(/\sclass=["']([^"']*)\blazyload\b([^"']*)["']/gi, ' class="$1$2"')
+  content = content
+    .replace(/\sdata-src=/gi, ' src=')
+    .replace(/\sclass=["']([^"']*)\blazyload\b([^"']*)["']/gi, ' class="$1$2"')
+    .replace(/<img\b(?![^>]*\bloading=)([^>]*)>/gi, '<img loading="lazy" decoding="async"$1>')
   content = content.replace(/href=["'](?:https?:\/\/lifesimulation\.fandom\.com)?\/zh\/wiki\/([^"'#?]+)(#[^"']*)?["']/gi, (_, rawTitle, hash = '') => {
     const slug = pages[normalizeTitle(rawTitle)]
     return slug ? `href="#/wiki/${slug}${hash}"` : 'href="#" class="unavailable-link"'
   })
-  content = content.replace(/href=["']#([^"']+)["']/gi, (_, anchor) => `href="#/wiki/${currentSlug}#${anchor}"`)
+  content = content.replace(/href=["']#(?!\/wiki\/)([^"']+)["']/gi, (_, anchor) => `href="#/wiki/${currentSlug}#${anchor}"`)
   return content
 }
 

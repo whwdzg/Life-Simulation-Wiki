@@ -228,10 +228,15 @@ const start = async () => {
     const handlePageNavigation = (event) => {
       const anchor = event.target.closest('a[href]')
       if (!anchor) return
+      const slug = anchor.dataset.wikiSlug
+      if (!slug) return
+      event.preventDefault()
       const target = anchor.dataset.scrollTarget
-      if (target && decodeSlug(anchor.dataset.wikiSlug) === decodeSlug(page.slug)) {
-        event.preventDefault()
-        scrollWithinPage(page.slug, target)
+      if (target && decodeSlug(slug) === decodeSlug(page.slug)) {
+        scrollWithinPage(slug, target)
+      } else {
+        const hash = target ? `#/wiki/${slug}#${encodeURIComponent(decodeSlug(target))}` : `#/wiki/${slug}`
+        location.hash = hash
       }
     }
     article.addEventListener('click', handlePageNavigation)

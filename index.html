@@ -13,7 +13,7 @@
     <script>
       window.setTimeout(() => {
         if (window.__lifeSimulationWikiStarted) return
-        document.querySelector('#app').innerHTML = '<main class="load-state"><h1>镜像站部署配置错误</h1><p>构建后的静态资源未能启动。如你是仓库所有者请在 GitHub 仓库的 Settings > Pages > Build and deployment 中选择 GitHub Actions。如你是访客，请尝试优化网络链接或联系所有者。</p></main>'
+        document.querySelector('#app').innerHTML = '<main class="load-state"><h1>镜像站部署配置错误</h1><p>构建后的静态资源未能启动。如你是仓库所有者请在 GitHub 仓库的 Settings > Pages > Build and deployment 中选择 GitHub Actions。如你是访客，请尝试优化网络链接后刷新重试，在多次未能成功访问下联系所有者。</p></main>'
       }, 6000)
     </script>
     <script type="module" src="/src/main.js"></script>

@@ -77,6 +77,23 @@ const normalizeTitle = (title) => decodeURIComponent(title).replace(/_/g, ' ').r
 
 const replaceAttribute = (html, attribute, replace) => html.replace(new RegExp(`(?<![\\w-])(${attribute}=["'])([^"']+)(["'])`, 'gi'), (_, start, value, end) => `${start}${replace(value)}${end}`)
 
+const fetchPageHistory = async (title) => {
+  try {
+    const data = await query({ action: 'query', prop: 'revisions', titles: title, rvlimit: 10, rvprop: 'user|timestamp|comment|ids', formatversion: '2' })
+    const page = data.query.pages[0]
+    if (!page || !page.revisions) return []
+    return page.revisions.map((rev) => ({
+      revid: rev.revid,
+      user: rev.user,
+      timestamp: rev.timestamp,
+      comment: rev.comment || '',
+    }))
+  } catch (error) {
+    console.warn(`Failed to fetch history for "${title}": ${error.message}`)
+    return []
+  }
+}
+
 const mapConcurrent = async (items, limit, mapper) => {
   const results = new Array(items.length)
   let nextIndex = 0
@@ -199,8 +216,10 @@ const main = async () => {
   }
   let completedArticles = 0
   const content = await mapConcurrent(articles, 8, async (page, index) => {
-    const parsed = await query({ action: 'parse', page: page.title, prop: 'text|sections|displaytitle' })
+    const parsed = await query({ action: 'parse', page: page.title, prop: 'text|sections|displaytitle|revisions' })
     const parse = parsed.parse
+    const latestRev = parse.revisions?.[0] || {}
+    const history = await fetchPageHistory(page.title)
     const article = {
       title: page.title,
       slug: pageMap[normalizeTitle(page.title)],
@@ -208,6 +227,13 @@ const main = async () => {
       displayTitle: parse.displaytitle || page.title,
       sections: parse.sections.map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
       html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[normalizeTitle(page.title)]),
+      revision: {
+        user: latestRev.user || '',
+        timestamp: latestRev.timestamp || '',
+        comment: latestRev.comment || '',
+        revid: latestRev.revid || 0,
+      },
+      history,
     }
     completedArticles += 1
     if (completedArticles % 5 === 0 || completedArticles === articles.length) {
@@ -220,7 +246,7 @@ const main = async () => {
   await mkdir(stagingOutputDirectory, { recursive: true })
   await mkdir(stagingPageDirectory, { recursive: true })
   await Promise.all(content.map((page) => writeFile(new URL(page.file, stagingPageDirectory), JSON.stringify(page))))
-  const index = content.map(({ html, ...page }) => {
+  const index = content.map(({ html, revision, history, ...page }) => {
     const text = plainText(html)
     return { ...page, summary: text.slice(0, 180), searchText: text.slice(0, 4000) }
   })

@@ -55,7 +55,8 @@ jobs:
             "runNumber": "${{ github.run_number }}",
             "sha": "${{ github.sha }}",
             "ref": "${{ github.ref }}",
-            "actor": "${{ github.actor }}"
+            "actor": "${{ github.actor }}",
+            "message": "${{ github.event.head_commit.message || '' }}"
           }
           EOF
       - run: npm run build

@@ -8,6 +8,22 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
+// Listen for reload message from the page
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'reload') {
+    event.waitUntil((async () => {
+      const cache = await caches.open(cacheName)
+      if (event.data.url) {
+        await cache.delete(event.data.url)
+      } else {
+        const keys = await cache.keys()
+        await Promise.all(keys.map((request) => cache.delete(request)))
+      }
+      event.ports[0]?.postMessage({ type: 'reload-done' })
+    })())
+  }
+})
+
 const isImageRequest = (url) => /\.(png|jpe?g|gif|svg|webp|avif|bmp|ico)(\?|$)/i.test(url.pathname)
 
 const staleWhileRevalidate = async (request) => {

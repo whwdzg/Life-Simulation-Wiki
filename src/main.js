@@ -49,13 +49,48 @@ const renderFailure = (message) => {
 }
 
 const formatTime = (value) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium', hour12: false }).format(new Date(value)) : '尚未完成首次抓取'
+const formatTimeShort = (value) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short', hour12: false }).format(new Date(value)) : ''
+
+const revisionPanel = (page) => {
+  const rev = page.revision || {}
+  if (!rev.user && !rev.timestamp) return ''
+  const historyCount = page.history ? page.history.length : 0
+  return `<section class="sync-status revision-info"><h2>页面编辑信息</h2><p>编辑人：${escapeHtml(rev.user || '未知')}</p><p>编辑时间：<time datetime="${rev.timestamp}">${formatTime(rev.timestamp)}</time></p>${rev.comment ? `<p>编辑摘要：${escapeHtml(rev.comment)}</p>` : ''}${historyCount > 1 ? `<p><button class="history-btn" type="button" data-slug="${escapeHtml(page.slug)}">查看历史版本（${historyCount} 个）</button></p>` : ''}</section>`
+}
+
+const renderHistoryDialog = (page) => {
+  const list = (page.history || []).map((rev, index) => `<label class="history-item"><input type="radio" name="history-rev" value="${rev.revid}" data-index="${index}"${index === 0 ? ' checked' : ''}><span class="history-meta"><strong>${escapeHtml(rev.user || '未知')}</strong><time datetime="${rev.timestamp}">${formatTimeShort(rev.timestamp)}</time></span><span class="history-comment">${escapeHtml(rev.comment || '')}</span></label>`).join('')
+  return `<dialog id="history-dialog"><button class="dialog-close" type="button" aria-label="关闭">×</button><h2>历史版本</h2><div class="history-list">${list || '<p>暂无历史版本信息。</p>'}</div><div class="history-actions"><button class="history-view-btn" type="button" disabled>查看选中版本</button><button class="history-diff-btn" type="button" disabled>与当前版本对比</button></div><div id="history-preview" class="history-preview"></div></dialog>`
+}
+
+const diffHtml = (oldHtml, newHtml) => {
+  const oldText = oldHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  const newText = newHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  if (oldText === newText) return '<p class="diff-no-change">两个版本内容相同。</p>'
+  const oldLines = oldText.split('\n')
+  const newLines = newText.split('\n')
+  let result = '<table class="diff-table"><thead><tr><th>旧版本</th><th>新版本</th></tr></thead><tbody>'
+  const maxLen = Math.max(oldLines.length, newLines.length)
+  for (let i = 0; i < maxLen; i++) {
+    const oldLine = oldLines[i] || ''
+    const newLine = newLines[i] || ''
+    if (oldLine !== newLine) {
+      result += `<tr class="diff-changed"><td>${escapeHtml(oldLine) || '&nbsp;'}</td><td>${escapeHtml(newLine) || '&nbsp;'}</td></tr>`
+    } else {
+      result += `<tr><td>${escapeHtml(oldLine)}</td><td>${escapeHtml(newLine)}</td></tr>`
+    }
+  }
+  result += '</tbody></table>'
+  return result
+}
 
 const deployPanel = (deploy = {}) => {
   const branch = (deploy.ref || '').replace(/^refs\/heads\//, '')
   const shortSha = (deploy.sha || '').slice(0, 7)
   const repoUrl = deploy.repository ? `https://github.com/${deploy.repository}` : ''
   const runUrl = deploy.repository && deploy.runId ? `${repoUrl}/actions/runs/${deploy.runId}` : ''
-  return `<section class="sync-status deploy-info"><h2>部署信息</h2><p>${repoUrl ? `<a href="${repoUrl}" target="_blank" rel="noreferrer">${escapeHtml(deploy.repository)}</a>` : '—'}</p><p>分支：${branch || '—'}&#x2003;提交：${shortSha ? (repoUrl ? `<a href="${repoUrl}/commit/${deploy.sha}" target="_blank" rel="noreferrer">${shortSha}</a>` : shortSha) : '—'}</p>${runUrl ? `<p>触发：<a href="${runUrl}" target="_blank" rel="noreferrer">${escapeHtml(deploy.workflow || '')} #${deploy.runNumber || ''}</a></p>` : ''}</section>`
+  const commitMessage = deploy.message || ''
+  return `<section class="sync-status deploy-info"><h2>部署信息</h2><p>${repoUrl ? `<a href="${repoUrl}" target="_blank" rel="noreferrer">${escapeHtml(deploy.repository)}</a>` : '—'}</p><p>分支：${branch || '—'}&#x2003;提交：${shortSha ? (repoUrl ? `<a href="${repoUrl}/commit/${deploy.sha}" target="_blank" rel="noreferrer">${shortSha}</a>` : shortSha) : '—'}</p>${commitMessage ? `<p>提交描述：${escapeHtml(commitMessage)}</p>` : ''}${runUrl ? `<p>触发：<a href="${runUrl}" target="_blank" rel="noreferrer">${escapeHtml(deploy.workflow || '')} #${deploy.runNumber || ''}</a></p>` : ''}<p><button class="reload-page-btn" type="button">重载页面</button></p></section>`
 }
 
 const syncPanel = (sync = {}) => {
@@ -73,13 +108,23 @@ const syncPanel = (sync = {}) => {
   return '<section class="sync-status"><h2>镜像抓取状态</h2><p>正在等待首次原站抓取。GitHub Actions 会在每小时的第 17 分执行同步。</p></section>'
 }
 
-const pageFragment = (page, isHome) => {
+const pageFragment = (page, isHome, logoUrl) => {
   if (!isHome) return { articleHtml: page.html, quoteHtml: '' }
   const template = document.createElement('template')
   template.innerHTML = page.html
   const quote = template.content.querySelector('.main-page-tag-rcs')
   const quoteHtml = quote?.querySelector('.rcs-container')?.innerHTML ?? quote?.innerHTML ?? ''
   quote?.remove()
+  // 替换首页第一个大图为网站图标
+  const firstImg = template.content.querySelector('img[src*="wiki-assets/"]')
+  if (firstImg && logoUrl) {
+    firstImg.src = logoUrl
+    firstImg.dataset.sourceUrl = logoUrl
+    firstImg.style.maxWidth = '200px'
+    firstImg.style.maxHeight = '200px'
+    firstImg.loading = 'eager'
+    firstImg.fetchPriority = 'high'
+  }
   return { articleHtml: template.innerHTML, quoteHtml }
 }
 
@@ -139,7 +184,8 @@ const normalizeWikiLinks = (container) => {
     const match = href?.match(/^#\/wiki\/([^#]+)(?:#(.+))?$/)
     if (!match) return
     const [, slug, fragment = ''] = match
-    anchor.href = routeFor(slug, fragment)
+    // 保持 #/wiki/ 格式，不转为完整 URL，避免 hash 被浏览器编码
+    anchor.href = fragment ? `#/wiki/${slug}#${encodeURIComponent(decodeSlug(fragment))}` : `#/wiki/${slug}`
     anchor.dataset.wikiSlug = slug
     if (fragment) anchor.dataset.scrollTarget = decodeSlug(fragment)
   })
@@ -219,14 +265,15 @@ const start = async () => {
 
     const toc = page.sections.filter((section) => Number(section.level) <= 3).map((section) => `<a class="toc-level-${section.level}" data-wiki-slug="${page.slug}" data-scroll-target="${escapeHtml(section.anchor)}" href="${routeFor(page.slug, section.anchor)}">${section.line}</a>`).join('')
     const isHome = metadata.slug === home.slug
-    const { articleHtml, quoteHtml } = pageFragment(page, isHome)
+    const { articleHtml, quoteHtml } = pageFragment(page, isHome, theme.icon)
     const outline = toc || '<span>本页没有目录</span>'
     document.title = `${page.title} | 来福Simulation Wiki（镜像站）`
     app.innerHTML = `
       <header class="wiki-header"><a class="wiki-brand" href="${routeFor(home.slug)}"><img class="wiki-brand-logo" src="${theme.icon}" alt="来福Simulation 标志"><span>来福Simulation Wiki（镜像站）</span></a><button class="mobile-toc-button" type="button" aria-expanded="false">目录</button><div class="header-row2"><nav><a href="${routeFor(home.slug)}">首页</a><button class="all-pages-button" type="button" aria-expanded="false">全部页面</button></nav><button class="search-toggle" type="button" aria-label="搜索">⌕</button></div><form class="wiki-search" role="search"><label class="sr-only" for="wiki-search-input">搜索 Wiki</label><input id="wiki-search-input" type="search" placeholder="搜索这个镜像站"><button type="submit" aria-label="搜索">⌕</button></form></header>
       <div class="wiki-drawer" hidden><div class="drawer-head"><strong>全部条目（${pages.length}）</strong><button class="close-drawer" type="button" aria-label="关闭">×</button></div><div class="page-list">${pageList}</div></div>
       <aside class="mobile-toc-drawer" hidden aria-label="本页目录"><div class="drawer-head"><strong>本页目录</strong><button class="close-mobile-toc" type="button" aria-label="关闭目录">×</button></div><nav>${outline}</nav></aside>
-      <main class="wiki-shell"><article class="wiki-article"><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki 镜像站</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div>${isHome ? syncPanel(sync) + deployPanel(deploy) : ''}<footer class="article-license">本页为<a href="https://lifesimulation.fandom.com/zh/wiki/%E6%9D%A5%E7%A6%8FSimulation" target="_blank" rel="noreferrer">来福Simulation Wiki</a> 的静态镜像，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。源代码以GPL v3许可协议开源。本站不提供编辑内容功能，也无法完全替代原页面，仅供静态页面浏览。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 镜像条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回镜像首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
+      <main class="wiki-shell"><article class="wiki-article"><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki 镜像站</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div>${isHome ? syncPanel(sync) + deployPanel(deploy) : ''}${revisionPanel(page)}<footer class="article-license">本页为<a href="https://lifesimulation.fandom.com/zh/wiki/%E6%9D%A5%E7%A6%8FSimulation" target="_blank" rel="noreferrer">来福Simulation Wiki</a> 的静态镜像，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。源代码以GPL v3许可协议开源。本站不提供编辑内容功能，也无法完全替代原页面，仅供静态页面浏览。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 镜像条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回镜像首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
+      ${renderHistoryDialog(page)}
       <dialog id="search-dialog"><button class="dialog-close" type="button" aria-label="关闭">×</button><h2>搜索 Wiki</h2><form class="dialog-search"><input type="search" placeholder="输入关键词" autofocus><button type="submit">搜索</button></form><div id="search-results"></div></dialog>`
 
     const drawer = document.querySelector('.wiki-drawer')
@@ -250,6 +297,73 @@ const start = async () => {
     document.querySelector('.search-toggle')?.addEventListener('click', () => { searchDialog.showModal(); const field = document.querySelector('.dialog-search input'); field.value = ''; showSearch(''); field.focus() })
     document.querySelector('.dialog-search').addEventListener('submit', (event) => { event.preventDefault(); showSearch(event.currentTarget.querySelector('input').value) })
     document.querySelector('.dialog-close').addEventListener('click', () => searchDialog.close())
+    const historyDialog = document.querySelector('#history-dialog')
+    const historyCloseBtn = historyDialog?.querySelector('.dialog-close')
+    if (historyCloseBtn) historyCloseBtn.addEventListener('click', () => historyDialog.close())
+    document.querySelector('.reload-page-btn')?.addEventListener('click', async () => {
+      const btn = document.querySelector('.reload-page-btn')
+      btn.disabled = true
+      btn.textContent = '正在重载...'
+      try {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          const channel = new MessageChannel()
+          const promise = new Promise((resolve) => { channel.port1.onmessage = resolve })
+          navigator.serviceWorker.controller.postMessage({ type: 'reload' }, [channel.port2])
+          await promise
+        }
+        const cache = await caches?.open('life-simulation-wiki-v7')
+        if (cache) {
+          const keys = await cache.keys()
+          await Promise.all(keys.map((req) => cache.delete(req)))
+        }
+      } catch { /* best effort */ }
+      location.reload()
+    })
+    const historyBtn = document.querySelector('.history-btn')
+    if (historyBtn) {
+      historyBtn.addEventListener('click', () => {
+        historyDialog?.showModal()
+        document.querySelector('#history-preview').innerHTML = ''
+        document.querySelector('.history-view-btn').disabled = true
+        document.querySelector('.history-diff-btn').disabled = true
+      })
+    }
+    document.querySelector('.history-list')?.addEventListener('change', () => {
+      document.querySelector('.history-view-btn').disabled = false
+      document.querySelector('.history-diff-btn').disabled = false
+    })
+    document.querySelector('.history-view-btn')?.addEventListener('click', async () => {
+      const selected = document.querySelector('input[name="history-rev"]:checked')
+      if (!selected) return
+      const index = Number(selected.dataset.index)
+      const rev = page.history?.[index]
+      if (!rev) return
+      const preview = document.querySelector('#history-preview')
+      preview.innerHTML = '<p>正在加载该版本内容……</p>'
+      try {
+        const data = await fetchJson(`https://lifesimulation.fandom.com/zh/api.php?action=parse&oldid=${rev.revid}&prop=text&format=json&origin=*`)
+        const html = data?.parse?.text?.['*'] || ''
+        preview.innerHTML = `<div class="diff-result"><h3>版本 ${rev.revid} - ${escapeHtml(rev.user)} (${formatTimeShort(rev.timestamp)})</h3><div class="history-preview-content">${html}</div></div>`
+      } catch (error) {
+        preview.innerHTML = `<p>无法加载该版本：${escapeHtml(error.message)}</p>`
+      }
+    })
+    document.querySelector('.history-diff-btn')?.addEventListener('click', async () => {
+      const selected = document.querySelector('input[name="history-rev"]:checked')
+      if (!selected) return
+      const index = Number(selected.dataset.index)
+      const rev = page.history?.[index]
+      if (!rev) return
+      const preview = document.querySelector('#history-preview')
+      preview.innerHTML = '<p>正在加载并对比……</p>'
+      try {
+        const data = await fetchJson(`https://lifesimulation.fandom.com/zh/api.php?action=parse&oldid=${rev.revid}&prop=text&format=json&origin=*`)
+        const oldHtml = data?.parse?.text?.['*'] || ''
+        preview.innerHTML = `<div class="diff-result"><h3>与当前版本对比（版本 ${rev.revid}）</h3>${diffHtml(oldHtml, page.html)}</div>`
+      } catch (error) {
+        preview.innerHTML = `<p>无法加载对比内容：${escapeHtml(error.message)}</p>`
+      }
+    })
     const article = document.querySelector('.wiki-article')
     normalizeWikiLinks(article)
     const handlePageNavigation = (event) => {

@@ -10,14 +10,21 @@ self.addEventListener('activate', (event) => {
 
 const isImageRequest = (url) => /\.(png|jpe?g|gif|svg|webp|avif|bmp|ico)(\?|$)/i.test(url.pathname)
 
-const fromCache = async (request) => {
-  const cached = await caches.match(request)
-  if (cached) return cached
-  const response = await fetch(request).catch(() => undefined)
-  if (response && (response.ok || response.type === 'opaque')) {
-    (await caches.open(cacheName)).put(request, response.clone())
+const staleWhileRevalidate = async (request) => {
+  const cache = await caches.open(cacheName)
+  const cached = await cache.match(request)
+  const fetchPromise = fetch(request).then((response) => {
+    if (response && (response.ok || response.type === 'opaque')) {
+      cache.put(request, response.clone())
+    }
+    return response
+  }).catch(() => undefined)
+  // Return cached immediately if available, otherwise wait for network
+  if (cached) {
+    fetchPromise.catch(() => {}) // background update
+    return cached
   }
-  return response
+  return fetchPromise
 }
 
 const offlineFallback = async () => {
@@ -39,7 +46,7 @@ self.addEventListener('fetch', (event) => {
 
   // Cache images (including cross-origin) with cache-first strategy
   if (isImageRequest(url)) {
-    event.respondWith(fromCache(request).catch(() => fetch(request)))
+    event.respondWith(staleWhileRevalidate(request).catch(() => fetch(request)))
     return
   }
 
@@ -47,7 +54,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
 
   event.respondWith(
-    fromCache(request).catch(() => {
+    staleWhileRevalidate(request).catch(() => {
       // Navigation requests: show offline page
       if (request.mode === 'navigate') return offlineFallback()
       // Other requests: try to serve from cache offline page

@@ -53,9 +53,9 @@ const formatTimeShort = (value) => value ? new Intl.DateTimeFormat('zh-CN', { da
 
 const revisionPanel = (page) => {
   const rev = page.revision || {}
-  if (!rev.user && !rev.timestamp) return ''
+  if (!rev.user && !rev.timestamp && !rev.revid) return ''
   const historyCount = page.history ? page.history.length : 0
-  return `<section class="sync-status revision-info"><h2>页面编辑信息</h2><p>编辑人：${escapeHtml(rev.user || '未知')}</p><p>编辑时间：<time datetime="${rev.timestamp}">${formatTime(rev.timestamp)}</time></p>${rev.comment ? `<p>编辑摘要：${escapeHtml(rev.comment)}</p>` : ''}${historyCount > 1 ? `<p><button class="history-btn" type="button" data-slug="${escapeHtml(page.slug)}">查看历史版本（${historyCount} 个）</button></p>` : ''}</section>`
+  return `<section class="sync-status revision-info"><h2>页面编辑信息</h2><p>编辑人：${escapeHtml(rev.user || '未知')}</p><p>编辑时间：<time datetime="${rev.timestamp}">${formatTime(rev.timestamp)}</time></p>${rev.comment ? `<p>编辑摘要：${escapeHtml(rev.comment)}</p>` : ''}${historyCount > 0 ? `<p><button class="history-btn" type="button" data-slug="${escapeHtml(page.slug)}">查看历史版本（${historyCount} 个）</button></p>` : ''}</section>`
 }
 
 const renderHistoryDialog = (page) => {
@@ -184,9 +184,10 @@ const normalizeWikiLinks = (container) => {
     const match = href?.match(/^#\/wiki\/([^#]+)(?:#(.+))?$/)
     if (!match) return
     const [, slug, fragment = ''] = match
-    // 保持 #/wiki/ 格式，不转为完整 URL，避免 hash 被浏览器编码
-    anchor.href = fragment ? `#/wiki/${slug}#${encodeURIComponent(decodeSlug(fragment))}` : `#/wiki/${slug}`
-    anchor.dataset.wikiSlug = slug
+    // 保持 #/wiki/ 格式，使用解码后的 slug 避免浏览器二次编码
+    const decodedSlug = decodeSlug(slug)
+    anchor.href = fragment ? `#/wiki/${decodedSlug}#${encodeURIComponent(decodeSlug(fragment))}` : `#/wiki/${decodedSlug}`
+    anchor.dataset.wikiSlug = decodedSlug
     if (fragment) anchor.dataset.scrollTarget = decodeSlug(fragment)
   })
 }
@@ -305,18 +306,13 @@ const start = async () => {
       btn.disabled = true
       btn.textContent = '正在重载...'
       try {
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          const channel = new MessageChannel()
-          const promise = new Promise((resolve) => { channel.port1.onmessage = resolve })
-          navigator.serviceWorker.controller.postMessage({ type: 'reload' }, [channel.port2])
-          await promise
-        }
-        const cache = await caches?.open('life-simulation-wiki-v7')
-        if (cache) {
-          const keys = await cache.keys()
-          await Promise.all(keys.map((req) => cache.delete(req)))
+        // 清除所有 service worker 缓存
+        if ('caches' in window) {
+          const keys = await caches.keys()
+          await Promise.all(keys.map((key) => caches.delete(key)))
         }
       } catch { /* best effort */ }
+      // 强制从服务器重新加载，跳过浏览器缓存
       location.reload()
     })
     const historyBtn = document.querySelector('.history-btn')
@@ -332,36 +328,30 @@ const start = async () => {
       document.querySelector('.history-view-btn').disabled = false
       document.querySelector('.history-diff-btn').disabled = false
     })
-    document.querySelector('.history-view-btn')?.addEventListener('click', async () => {
+    document.querySelector('.history-view-btn')?.addEventListener('click', () => {
       const selected = document.querySelector('input[name="history-rev"]:checked')
       if (!selected) return
       const index = Number(selected.dataset.index)
       const rev = page.history?.[index]
       if (!rev) return
       const preview = document.querySelector('#history-preview')
-      preview.innerHTML = '<p>正在加载该版本内容……</p>'
-      try {
-        const data = await fetchJson(`https://lifesimulation.fandom.com/zh/api.php?action=parse&oldid=${rev.revid}&prop=text&format=json&origin=*`)
-        const html = data?.parse?.text?.['*'] || ''
-        preview.innerHTML = `<div class="diff-result"><h3>版本 ${rev.revid} - ${escapeHtml(rev.user)} (${formatTimeShort(rev.timestamp)})</h3><div class="history-preview-content">${html}</div></div>`
-      } catch (error) {
-        preview.innerHTML = `<p>无法加载该版本：${escapeHtml(error.message)}</p>`
+      if (rev.html) {
+        preview.innerHTML = `<div class="diff-result"><h3>版本 ${rev.revid} - ${escapeHtml(rev.user)} (${formatTimeShort(rev.timestamp)})</h3><div class="history-preview-content">${rev.html}</div></div>`
+      } else {
+        preview.innerHTML = '<p>该版本内容未同步到镜像站，无法查看。</p>'
       }
     })
-    document.querySelector('.history-diff-btn')?.addEventListener('click', async () => {
+    document.querySelector('.history-diff-btn')?.addEventListener('click', () => {
       const selected = document.querySelector('input[name="history-rev"]:checked')
       if (!selected) return
       const index = Number(selected.dataset.index)
       const rev = page.history?.[index]
       if (!rev) return
       const preview = document.querySelector('#history-preview')
-      preview.innerHTML = '<p>正在加载并对比……</p>'
-      try {
-        const data = await fetchJson(`https://lifesimulation.fandom.com/zh/api.php?action=parse&oldid=${rev.revid}&prop=text&format=json&origin=*`)
-        const oldHtml = data?.parse?.text?.['*'] || ''
-        preview.innerHTML = `<div class="diff-result"><h3>与当前版本对比（版本 ${rev.revid}）</h3>${diffHtml(oldHtml, page.html)}</div>`
-      } catch (error) {
-        preview.innerHTML = `<p>无法加载对比内容：${escapeHtml(error.message)}</p>`
+      if (rev.html) {
+        preview.innerHTML = `<div class="diff-result"><h3>与当前版本对比（版本 ${rev.revid}）</h3>${diffHtml(rev.html, page.html)}</div>`
+      } else {
+        preview.innerHTML = '<p>该版本内容未同步到镜像站，无法对比。</p>'
       }
     })
     const article = document.querySelector('.wiki-article')
@@ -376,8 +366,9 @@ const start = async () => {
       if (target && decodeSlug(slug) === decodeSlug(page.slug)) {
         scrollWithinPage(slug, target)
       } else {
-        const hash = target ? `#/wiki/${slug}#${encodeURIComponent(decodeSlug(target))}` : `#/wiki/${slug}`
-        location.hash = hash
+        const decodedSlug = decodeSlug(slug)
+        const hash = target ? `#/wiki/${decodedSlug}#${encodeURIComponent(decodeSlug(target))}` : `#/wiki/${decodedSlug}`
+        window.location.href = hash
       }
     }
     article.addEventListener('click', handlePageNavigation)

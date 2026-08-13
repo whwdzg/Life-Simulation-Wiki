@@ -77,17 +77,32 @@ const normalizeTitle = (title) => decodeURIComponent(title).replace(/_/g, ' ').r
 
 const replaceAttribute = (html, attribute, replace) => html.replace(new RegExp(`(?<![\\w-])(${attribute}=["'])([^"']+)(["'])`, 'gi'), (_, start, value, end) => `${start}${replace(value)}${end}`)
 
-const fetchPageHistory = async (title) => {
+const fetchPageHistory = async (title, pages, assets) => {
   try {
     const data = await query({ action: 'query', prop: 'revisions', titles: title, rvlimit: 10, rvprop: 'user|timestamp|comment|ids', formatversion: '2' })
     const page = data.query.pages[0]
     if (!page || !page.revisions) return []
-    return page.revisions.map((rev) => ({
-      revid: rev.revid,
-      user: rev.user,
-      timestamp: rev.timestamp,
-      comment: rev.comment || '',
-    }))
+    const results = []
+    for (const rev of page.revisions) {
+      const item = {
+        revid: rev.revid,
+        user: rev.user,
+        timestamp: rev.timestamp,
+        comment: rev.comment || '',
+        html: '',
+      }
+      try {
+        const parsed = await query({ action: 'parse', oldid: rev.revid, prop: 'text', formatversion: '2' })
+        const rawHtml = parsed?.parse?.text || ''
+        if (rawHtml) {
+          item.html = sanitizeHtml(rawHtml, pages, assets, '')
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch history content for "${title}" rev ${rev.revid}: ${error.message}`)
+      }
+      results.push(item)
+    }
+    return results
   } catch (error) {
     console.warn(`Failed to fetch history for "${title}": ${error.message}`)
     return []
@@ -219,7 +234,7 @@ const main = async () => {
     const parsed = await query({ action: 'parse', page: page.title, prop: 'text|sections|displaytitle|revisions' })
     const parse = parsed.parse
     const latestRev = parse.revisions?.[0] || {}
-    const history = await fetchPageHistory(page.title)
+    const history = await fetchPageHistory(page.title, pageMap, assets)
     const article = {
       title: page.title,
       slug: pageMap[normalizeTitle(page.title)],

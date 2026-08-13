@@ -134,7 +134,10 @@ const sanitizeHtml = (html, pages, assets, currentSlug) => {
     const slug = pages[normalizeTitle(rawTitle)]
     return slug ? `href="#/wiki/${slug}${hash}"` : 'href="#" class="unavailable-link"'
   })
-  content = content.replace(/href=["']#(?!\/wiki\/)([^"']+)["']/gi, (_, anchor) => `href="#/wiki/${currentSlug}#${anchor}"`)
+  content = content.replace(/href=["']#(?!\/wiki\/)([^"']+)["']/gi, (_, anchor) => {
+    const slug = pages[normalizeTitle(anchor)]
+    return slug ? `href="#/wiki/${slug}"` : `href="#/wiki/${currentSlug}#${anchor}"`
+  })
   return content
 }
 

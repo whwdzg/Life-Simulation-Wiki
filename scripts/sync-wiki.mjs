@@ -232,32 +232,46 @@ const main = async () => {
     icon: siteAsset(assets, 'Site-logo.png'),
   }
   let completedArticles = 0
-  const content = await mapConcurrent(articles, 8, async (page, index) => {
-    const parsed = await query({ action: 'parse', page: page.title, prop: 'text|sections|displaytitle|revisions' })
-    const parse = parsed.parse
-    const latestRev = parse.revisions?.[0] || {}
-    const history = await fetchPageHistory(page.title, pageMap, assets)
-    const article = {
-      title: page.title,
-      slug: pageMap[normalizeTitle(page.title)],
-      file: pageFileName(page.title),
-      displayTitle: parse.displaytitle || page.title,
-      sections: parse.sections.map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
-      html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[normalizeTitle(page.title)]),
-      revision: {
-        user: latestRev.user || '',
-        timestamp: latestRev.timestamp || '',
-        comment: latestRev.comment || '',
-        revid: latestRev.revid || 0,
-      },
-      history,
+  const content = []
+  const skippedPages = []
+  await mapConcurrent(articles, 8, async (page, index) => {
+    try {
+      const parsed = await query({ action: 'parse', page: page.title, prop: 'text|sections|displaytitle|revisions' })
+      const parse = parsed.parse
+      if (!parse?.text?.['*']) {
+        console.warn(`[${index + 1}/${articles.length}] Skipped ${page.title} (no content)`)
+        skippedPages.push(page.title)
+        completedArticles += 1
+        return
+      }
+      const latestRev = parse.revisions?.[0] || {}
+      const history = await fetchPageHistory(page.title, pageMap, assets)
+      const article = {
+        title: page.title,
+        slug: pageMap[normalizeTitle(page.title)],
+        file: pageFileName(page.title),
+        displayTitle: parse.displaytitle || page.title,
+        sections: (parse.sections || []).map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
+        html: sanitizeHtml(parse.text['*'], pageMap, assets, pageMap[normalizeTitle(page.title)]),
+        revision: {
+          user: latestRev.user || '',
+          timestamp: latestRev.timestamp || '',
+          comment: latestRev.comment || '',
+          revid: latestRev.revid || 0,
+        },
+        history,
+      }
+      content.push(article)
+      completedArticles += 1
+      if (completedArticles % 5 === 0 || completedArticles === articles.length) {
+        await writeStatus({ state: 'running', phase: 'articles', articles: { completed: completedArticles, total: articles.length }, media: { completed: images.length, total: images.length, failed: failedMedia } })
+      }
+      console.log(`[${index + 1}/${articles.length}] ${page.title}`)
+    } catch (error) {
+      console.warn(`[${index + 1}/${articles.length}] Failed to fetch ${page.title}: ${error.message}`)
+      skippedPages.push(page.title)
+      completedArticles += 1
     }
-    completedArticles += 1
-    if (completedArticles % 5 === 0 || completedArticles === articles.length) {
-      await writeStatus({ state: 'running', phase: 'articles', articles: { completed: completedArticles, total: articles.length }, media: { completed: images.length, total: images.length, failed: failedMedia } })
-    }
-    console.log(`[${index + 1}/${articles.length}] ${page.title}`)
-    return article
   })
   // 抓取 Special 动态页面的快照内容
   const specialPages = ['Special:Map', 'Special:AllPages', 'Special:RecentChanges', 'Special:NewFiles', 'Special:Statistics', 'Special:Version', 'Special:Community', 'Special:PhotoOfTheDay']
@@ -297,6 +311,7 @@ const main = async () => {
     }
   }
   const allContent = [...content, ...specialArticles]
+  console.log(`Fetched ${content.length} articles, skipped ${skippedPages.length} pages, fetched ${specialArticles.length} special pages.`)
   await rm(stagingOutputDirectory, { recursive: true, force: true })
   await mkdir(stagingOutputDirectory, { recursive: true })
   await mkdir(stagingPageDirectory, { recursive: true })
@@ -305,15 +320,15 @@ const main = async () => {
     const text = plainText(html)
     return { ...page, summary: text.slice(0, 180), searchText: text.slice(0, 4000) }
   })
-  const status = { state: 'success', phase: 'complete', capturedAt: timestamp(), articles: { completed: allContent.length, total: allContent.length }, media: { completed: images.length, total: images.length, failed: failedMedia } }
+  const status = { state: 'success', phase: 'complete', capturedAt: timestamp(), articles: { completed: allContent.length, total: articles.length }, media: { completed: images.length, total: images.length, failed: failedMedia } }
   await writeFile(new URL('index.json', stagingOutputDirectory), JSON.stringify({ generatedAt: status.capturedAt, site, sync: status, pages: index }))
-  await writeFile(new URL('manifest.json', stagingOutputDirectory), JSON.stringify({ articles: allContent.length, media: images.length, failedMedia, specialPages: specialArticles.length, capturedAt: status.capturedAt }, null, 2))
+  await writeFile(new URL('manifest.json', stagingOutputDirectory), JSON.stringify({ articles: allContent.length, media: images.length, failedMedia, specialPages: specialArticles.length, skippedPages: skippedPages.length, capturedAt: status.capturedAt }, null, 2))
   await rm(outputDirectory, { recursive: true, force: true })
   await rm(mediaDirectory, { recursive: true, force: true })
   await rename(stagingOutputDirectory, outputDirectory)
   await rename(stagingMediaDirectory, mediaDirectory)
   await writeStatus(status)
-  console.log(`Complete: ${articles.length} articles + ${specialArticles.length} special pages and ${images.length} media files (${images.filter((image) => isVideoMime(image.mime)).length} videos) migrated.`)
+  console.log(`Complete: ${content.length} articles + ${specialArticles.length} special pages and ${images.length} media files (${images.filter((image) => isVideoMime(image.mime)).length} videos) migrated. ${skippedPages.length} pages skipped.`)
 }
 
 main().catch(async (error) => {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 
 const api = 'https://lifesimulation.fandom.com/zh/api.php'
@@ -91,6 +91,8 @@ const mapConcurrent = async (items, limit, mapper) => {
   return results
 }
 
+const isVideoMime = (mime) => /^video\//.test(mime)
+
 const sanitizeHtml = (html, pages, assets, currentSlug) => {
   let content = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -113,6 +115,21 @@ const sanitizeHtml = (html, pages, assets, currentSlug) => {
     .replace(/\sdata-src=/gi, ' src=')
     .replace(/\sclass=["']([^"']*)\blazyload\b([^"']*)["']/gi, ' class="$1$2"')
     .replace(/<img\b(?![^>]*\bloading=)([^>]*)>/gi, '<img loading="lazy" decoding="async"$1>')
+  // rewrite video sources
+  content = content.replace(/<video\b([^>]*)>/gi, (_, before) => {
+    const attrs = before.replace(/\s(src|data-src)=(["'])([^"']+)\2/gi, (_, attr, quote, value) => {
+      const name = mediaName(value)
+      return name && assets[name] ? ` ${attr}="./wiki-assets/${assets[name]}"` : ` ${attr}=${quote}${value}${quote}`
+    })
+    return `<video${attrs} preload="none" playsinline>`
+  })
+  content = content.replace(/<source\b([^>]*)>/gi, (_, before) => {
+    const attrs = before.replace(/\s(src|data-src)=(["'])([^"']+)\2/gi, (_, attr, quote, value) => {
+      const name = mediaName(value)
+      return name && assets[name] ? ` ${attr}="./wiki-assets/${assets[name]}"` : ` ${attr}=${quote}${value}${quote}`
+    })
+    return `<source${attrs}>`
+  })
   content = content.replace(/href=["'](?:https?:\/\/lifesimulation\.fandom\.com)?\/zh\/wiki\/([^"'#?]+)(#[^"']*)?["']/gi, (_, rawTitle, hash = '') => {
     const slug = pages[normalizeTitle(rawTitle)]
     return slug ? `href="#/wiki/${slug}${hash}"` : 'href="#" class="unavailable-link"'
@@ -125,13 +142,20 @@ const downloadAssets = async (images, targetDirectory) => {
   const assets = Object.fromEntries(images.map((image) => [image.name, assetName(image.name)]))
   let completed = 0
   let failed = 0
-  await rm(targetDirectory, { recursive: true, force: true })
   await mkdir(targetDirectory, { recursive: true })
+  // collect existing files for incremental skip
+  let existingFiles = new Set()
+  try { existingFiles = new Set(await readdir(targetDirectory)) } catch { /* new directory */ }
   const queue = [...images]
-  const workers = Array.from({ length: 6 }, async () => {
+  const workers = Array.from({ length: 10 }, async () => {
     while (queue.length) {
       const image = queue.shift()
-      const destination = new URL(assets[image.name], targetDirectory)
+      const fileName = assets[image.name]
+      const destination = new URL(fileName, targetDirectory)
+      if (existingFiles.has(fileName)) {
+        completed += 1
+        continue
+      }
       try {
         const response = await fetchWithRetry(image.url, { headers: { 'user-agent': 'Life-Simulation-Wiki static migration' } })
         if (!response.ok) throw new Error(String(response.status))
@@ -205,7 +229,7 @@ const main = async () => {
   await rename(stagingOutputDirectory, outputDirectory)
   await rename(stagingMediaDirectory, mediaDirectory)
   await writeStatus(status)
-  console.log(`Complete: ${articles.length} articles and ${images.length} media files migrated.`)
+  console.log(`Complete: ${articles.length} articles and ${images.length} media files (${images.filter((image) => isVideoMime(image.mime)).length} videos) migrated.`)
 }
 
 main().catch(async (error) => {

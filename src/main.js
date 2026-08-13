@@ -108,11 +108,21 @@ const prepareImages = (container) => {
     }
     image.classList.add('image-loading')
     image.closest('figure, .thumb, .image')?.classList.add('image-loading')
-    if (image.complete && image.naturalWidth > 0) finish()
-    else {
+    if (image.complete) {
+      if (image.naturalWidth > 0) finish()
+      else fallback()
+    } else {
       image.addEventListener('load', finish, { once: true })
       image.addEventListener('error', fallback, { once: true })
     }
+  })
+}
+
+const prepareVideos = (container) => {
+  container.querySelectorAll('video').forEach((video) => {
+    if (!video.hasAttribute('preload')) video.preload = 'none'
+    if (!video.hasAttribute('playsinline')) video.setAttribute('playsinline', '')
+    video.addEventListener('mouseenter', () => { video.preload = 'auto' }, { once: true })
   })
 }
 
@@ -212,7 +222,7 @@ const start = async () => {
     const outline = toc || '<span>本页没有目录</span>'
     document.title = `${page.title} | 来福Simulation Wiki（镜像站）`
     app.innerHTML = `
-      <header class="wiki-header"><a class="wiki-brand" href="${routeFor(home.slug)}"><img class="wiki-brand-logo" src="${theme.icon}" alt="来福Simulation 标志"><span>来福Simulation Wiki（镜像站）</span></a><button class="mobile-toc-button" type="button" aria-expanded="false">目录</button><nav><a href="${routeFor(home.slug)}">首页</a><button class="all-pages-button" type="button" aria-expanded="false">全部条目</button></nav><form class="wiki-search" role="search"><label class="sr-only" for="wiki-search-input">搜索 Wiki</label><input id="wiki-search-input" type="search" placeholder="搜索这个镜像站"><button type="submit" aria-label="搜索">⌕</button></form></header>
+      <header class="wiki-header"><a class="wiki-brand" href="${routeFor(home.slug)}"><img class="wiki-brand-logo" src="${theme.icon}" alt="来福Simulation 标志"><span>来福Simulation Wiki（镜像站）</span></a><button class="mobile-toc-button" type="button" aria-expanded="false">目录</button><div class="header-row2"><nav><a href="${routeFor(home.slug)}">首页</a><button class="all-pages-button" type="button" aria-expanded="false">全部页面</button></nav><button class="search-toggle" type="button" aria-label="搜索">⌕</button></div><form class="wiki-search" role="search"><label class="sr-only" for="wiki-search-input">搜索 Wiki</label><input id="wiki-search-input" type="search" placeholder="搜索这个镜像站"><button type="submit" aria-label="搜索">⌕</button></form></header>
       <div class="wiki-drawer" hidden><div class="drawer-head"><strong>全部条目（${pages.length}）</strong><button class="close-drawer" type="button" aria-label="关闭">×</button></div><div class="page-list">${pageList}</div></div>
       <aside class="mobile-toc-drawer" hidden aria-label="本页目录"><div class="drawer-head"><strong>本页目录</strong><button class="close-mobile-toc" type="button" aria-label="关闭目录">×</button></div><nav>${outline}</nav></aside>
       <main class="wiki-shell"><article class="wiki-article"><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki 镜像站</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div>${isHome ? syncPanel(sync) + deployPanel(deploy) : ''}<footer class="article-license">本页为<a href="https://lifesimulation.fandom.com/zh/wiki/%E6%9D%A5%E7%A6%8FSimulation" target="_blank" rel="noreferrer">来福Simulation Wiki</a> 的静态镜像，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。源代码以GPL v3许可协议开源。本站不提供编辑内容功能，也无法完全替代原页面，仅供静态页面浏览。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 镜像条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回镜像首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
@@ -236,6 +246,7 @@ const start = async () => {
     document.querySelector('.close-mobile-toc').addEventListener('click', () => { mobileToc.hidden = true; mobileTocButton.setAttribute('aria-expanded', 'false') })
     const searchDialog = document.querySelector('#search-dialog')
     document.querySelector('.wiki-search').addEventListener('submit', (event) => { event.preventDefault(); searchDialog.showModal(); const field = document.querySelector('.dialog-search input'); field.value = document.querySelector('#wiki-search-input').value; showSearch(field.value); field.focus() })
+    document.querySelector('.search-toggle')?.addEventListener('click', () => { searchDialog.showModal(); const field = document.querySelector('.dialog-search input'); field.value = ''; showSearch(''); field.focus() })
     document.querySelector('.dialog-search').addEventListener('submit', (event) => { event.preventDefault(); showSearch(event.currentTarget.querySelector('input').value) })
     document.querySelector('.dialog-close').addEventListener('click', () => searchDialog.close())
     const article = document.querySelector('.wiki-article')
@@ -258,6 +269,7 @@ const start = async () => {
     mobileToc.addEventListener('click', handlePageNavigation)
     document.querySelector('.wiki-sidebar').addEventListener('click', handlePageNavigation)
     prepareImages(article)
+    prepareVideos(article)
     renderTabbers()
     scrollToFragment()
   }

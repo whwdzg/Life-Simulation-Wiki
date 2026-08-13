@@ -45,8 +45,8 @@ jobs:
       - if: steps.sync-wiki.outcome == 'failure'
         run: echo "原站同步失败，已部署最近缓存的内容包或仓库内的镜像占位页。" >> $GITHUB_STEP_SUMMARY
       - name: Write deployment info
-        run: >-
-          mkdir -p public/wiki-data &&
+        run: |-
+          mkdir -p public/wiki-data
           cat > public/wiki-data/deploy-info.json <<'EOF'
           {
             "repository": "${{ github.repository }}",

@@ -75,7 +75,7 @@ const siteAsset = (assets, name) => assets[name] ? `./wiki-assets/${assets[name]
 const plainText = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
 const normalizeTitle = (title) => decodeURIComponent(title).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
 
-const replaceAttribute = (html, attribute, replace) => html.replace(new RegExp(`(${attribute}=["'])([^"']+)(["'])`, 'gi'), (_, start, value, end) => `${start}${replace(value)}${end}`)
+const replaceAttribute = (html, attribute, replace) => html.replace(new RegExp(`(?<![\\w-])(${attribute}=["'])([^"']+)(["'])`, 'gi'), (_, start, value, end) => `${start}${replace(value)}${end}`)
 
 const mapConcurrent = async (items, limit, mapper) => {
   const results = new Array(items.length)

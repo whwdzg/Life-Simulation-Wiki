@@ -1,6 +1,15 @@
 {
-  "state": "pending",
-  "phase": "waiting",
-  "articles": { "completed": 0, "total": 0 },
-  "media": { "completed": 0, "total": 0, "failed": 0 }
+  "updatedAt": "2026-08-13T06:06:33.467Z",
+  "state": "failed",
+  "phase": "error",
+  "error": "fetch failed",
+  "articles": {
+    "completed": 0,
+    "total": 0
+  },
+  "media": {
+    "completed": 0,
+    "total": 0,
+    "failed": 0
+  }
 }

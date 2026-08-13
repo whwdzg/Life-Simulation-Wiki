@@ -3,5 +3,34 @@
   "slug": "home",
   "displayTitle": "来福Simulation Wiki（镜像站）",
   "sections": [],
-  "html": "<section class=\"sync-notice\"><h2>正在同步原 Wiki 内容</h2><p>这是来福Simulation Wiki 的静态镜像站。内容同步完成后，页面会自动显示最新的文章、图片与站内链接。</p><p>请稍候刷新页面查看最新内容。</p></section>"
+  "html": "<section class=\"sync-notice\"><h2>正在同步原 Wiki 内容</h2><p>这是来福Simulation Wiki 的静态镜像站。内容同步完成后，页面会自动显示最新的文章、图片与站内链接。</p><p>请稍候刷新页面查看最新内容。</p></section>",
+  "revision": {
+    "user": "同步机器人",
+    "timestamp": "2026-08-13T00:00:00Z",
+    "comment": "自动同步最新页面内容",
+    "revid": 12345
+  },
+  "history": [
+    {
+      "revid": 12345,
+      "user": "同步机器人",
+      "timestamp": "2026-08-13T00:00:00Z",
+      "comment": "自动同步最新页面内容",
+      "html": ""
+    },
+    {
+      "revid": 12340,
+      "user": "管理员",
+      "timestamp": "2026-08-12T12:00:00Z",
+      "comment": "更新页面内容",
+      "html": ""
+    },
+    {
+      "revid": 12330,
+      "user": "编辑者",
+      "timestamp": "2026-08-10T08:30:00Z",
+      "comment": "初始创建",
+      "html": ""
+    }
+  ]
 }

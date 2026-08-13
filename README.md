@@ -1,6 +1,6 @@
-# 来福Simulation Wiki 静态迁移
+# 来福Simulation Wiki 静态镜像
 
-此项目会通过 MediaWiki API 迁移来福Simulation Wiki 的全部主命名空间条目与媒体文件，并生成可离线浏览的静态站点。
+此项目会通过 MediaWiki API 每小时镜像来福Simulation Wiki 的全部主命名空间条目与媒体文件，并生成可离线浏览的静态站点。
 
 ## 本地使用
 

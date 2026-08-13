@@ -1,4 +1,5 @@
 const cacheName = 'life-simulation-wiki-v7'
+const offlineUrl = 'offline.html'
 
 self.addEventListener('install', () => self.skipWaiting())
 
@@ -9,7 +10,7 @@ self.addEventListener('activate', (event) => {
 
 const isImageRequest = (url) => /\.(png|jpe?g|gif|svg|webp|avif|bmp|ico)(\?|$)/i.test(url.pathname)
 
-const cacheFirst = async (request) => {
+const fromCache = async (request) => {
   const cached = await caches.match(request)
   if (cached) return cached
   const response = await fetch(request).catch(() => undefined)
@@ -17,6 +18,15 @@ const cacheFirst = async (request) => {
     (await caches.open(cacheName)).put(request, response.clone())
   }
   return response
+}
+
+const offlineFallback = async () => {
+  const cached = await caches.match(offlineUrl)
+  if (cached) return cached
+  return new Response(
+    '<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>离线 - 来福Simulation Wiki</title></head><body><h2>离线</h2><p>网络不可用，缓存中未找到页面。</p></body></html>',
+    { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  )
 }
 
 self.addEventListener('fetch', (event) => {
@@ -29,12 +39,19 @@ self.addEventListener('fetch', (event) => {
 
   // Cache images (including cross-origin) with cache-first strategy
   if (isImageRequest(url)) {
-    event.respondWith(cacheFirst(request).catch(() => fetch(request)))
+    event.respondWith(fromCache(request).catch(() => fetch(request)))
     return
   }
 
   // Same-origin only for non-image requests
   if (url.origin !== self.location.origin) return
 
-  event.respondWith(cacheFirst(request).catch(() => Response.error()))
+  event.respondWith(
+    fromCache(request).catch(() => {
+      // Navigation requests: show offline page
+      if (request.mode === 'navigate') return offlineFallback()
+      // Other requests: try to serve from cache offline page
+      return caches.match(offlineUrl).then((cached) => cached || offlineFallback())
+    })
+  )
 })

@@ -1,0 +1,21 @@
+{
+  "id": "life-simulation-wiki",
+  "name": "来福Simulation Wiki（镜像站）",
+  "short_name": "来福Sim Wiki",
+  "description": "来福Simulation Wiki 的非官方静态镜像站",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7f6",
+  "theme_color": "#00665a",
+  "orientation": "any",
+  "categories": ["wiki", "entertainment", "lifestyle"],
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any monochrome"
+    }
+  ]
+}

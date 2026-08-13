@@ -36,6 +36,7 @@ const applyTheme = (site = {}) => {
   const theme = { background: site.background || fallbackTheme.background, icon: site.icon || fallbackTheme.icon }
   document.documentElement.style.setProperty('--wiki-background', `url("${new URL(theme.background, window.location.href).href}")`)
   document.querySelector('#site-favicon').href = new URL(theme.icon, window.location.href).href
+  document.documentElement.style.colorScheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   return theme
 }
 

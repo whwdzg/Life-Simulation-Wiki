@@ -128,8 +128,7 @@ const isVideoMime = (mime) => /^video\//.test(mime)
 const sanitizeHtml = (html, pages, assets, currentSlug) => {
   let content = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<div[^>]*class=["'][^"']*(?:fandom-ad|portable-infobox|mw-editsection)[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<div[^>]*class=["'][^"']*(?:fandom-ad|mw-editsection)[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '')
     .replace(/<fandom-ad\b[^>]*>[\s\S]*?<\/fandom-ad>/gi, '')
     .replace(/\s(?:on\w+|data-tracking-label)=["'][^"']*["']/gi, '')
   content = content.replace(/<img\b([^>]*?)\ssrc=(["'])data:image\/[^"']*\2([^>]*)>/gi, (tag, before, quote, after) => {
@@ -163,6 +162,8 @@ const sanitizeHtml = (html, pages, assets, currentSlug) => {
     return `<source${attrs}>`
   })
   content = content.replace(/href=["'](?:https?:\/\/lifesimulation\.fandom\.com)?\/zh\/wiki\/([^"'#?]+)(#[^"']*)?["']/gi, (_, rawTitle, hash = '') => {
+    // Maps (地图:, Map:) are now fetched via ns=110 and can be linked locally
+    // Special: pages that are captured via parse API can also be linked locally if they exist in pageMap
     const slug = pages[normalizeTitle(rawTitle)]
     return slug ? `href="#/wiki/${slug}${hash}"` : 'href="#" class="unavailable-link"'
   })
@@ -217,7 +218,8 @@ const main = async () => {
     getAll('allpages', 'ap'),
     getAll('allimages', 'ai'),
   ])
-  const articles = pages.filter((page) => page.ns === 0)
+  // 命名空间: 0=主内容, 1=讨论, 2=用户, 3=用户讨论, 4=项目, 5=项目讨论, 6=文件, 7=文件讨论, 10=模板, 11=模板讨论, 14=分类, 15=分类讨论, 110=地图, 4200=Map
+  const articles = pages.filter((page) => page.ns === 0 || page.ns === 1 || page.ns === 2 || page.ns === 3 || page.ns === 4 || page.ns === 5 || page.ns === 6 || page.ns === 7 || page.ns === 10 || page.ns === 11 || page.ns === 14 || page.ns === 15 || page.ns === 110 || page.ns === 4200)
   const pageMap = Object.fromEntries(articles.flatMap((page) => {
     const slug = encodeURIComponent(page.title.replaceAll(' ', '_'))
     return [[normalizeTitle(page.title), slug], [normalizeTitle(page.title.replaceAll(' ', '_')), slug]]
@@ -257,23 +259,61 @@ const main = async () => {
     console.log(`[${index + 1}/${articles.length}] ${page.title}`)
     return article
   })
+  // 抓取 Special 动态页面的快照内容
+  const specialPages = ['Special:Map', 'Special:AllPages', 'Special:RecentChanges', 'Special:NewFiles', 'Special:Statistics', 'Special:Version', 'Special:Community', 'Special:PhotoOfTheDay']
+  console.log('Fetching Special pages...')
+  const specialArticles = []
+  for (const title of specialPages) {
+    try {
+      console.log(`[Special] Fetching ${title}...`)
+      const parsed = await query({ action: 'parse', page: title, prop: 'text|sections|displaytitle|revisions' })
+      const parse = parsed.parse
+      if (!parse?.text?.['*']) {
+        console.warn(`[Special] Skipped ${title} (no content)`)
+        continue
+      }
+      const slug = encodeURIComponent(title.replaceAll(' ', '_'))
+      const latestRev = parse.revisions?.[0] || {}
+      pageMap[normalizeTitle(title)] = slug
+      const article = {
+        title,
+        slug,
+        file: pageFileName(title),
+        displayTitle: parse.displaytitle || title,
+        sections: parse.sections.map((section) => ({ anchor: section.anchor, line: section.line, level: section.level })),
+        html: sanitizeHtml(parse.text['*'], pageMap, assets, slug),
+        revision: {
+          user: latestRev.user || '',
+          timestamp: latestRev.timestamp || '',
+          comment: latestRev.comment || '',
+          revid: latestRev.revid || 0,
+        },
+        history: [],
+      }
+      specialArticles.push(article)
+      console.log(`[Special] Fetched ${title}`)
+    } catch (error) {
+      console.warn(`[Special] Failed to fetch ${title}: ${error.message}`)
+    }
+  }
+  const allContent = [...content, ...specialArticles]
   await rm(stagingOutputDirectory, { recursive: true, force: true })
   await mkdir(stagingOutputDirectory, { recursive: true })
   await mkdir(stagingPageDirectory, { recursive: true })
-  await Promise.all(content.map((page) => writeFile(new URL(page.file, stagingPageDirectory), JSON.stringify(page))))
-  const index = content.map(({ html, revision, history, ...page }) => {
+  await Promise.all(allContent.map((page) => writeFile(new URL(page.file, stagingPageDirectory), JSON.stringify(page))))
+  const index = allContent.map(({ html, revision, history, ...page }) => {
     const text = plainText(html)
     return { ...page, summary: text.slice(0, 180), searchText: text.slice(0, 4000) }
   })
-  const status = { state: 'success', phase: 'complete', capturedAt: timestamp(), articles: { completed: articles.length, total: articles.length }, media: { completed: images.length, total: images.length, failed: failedMedia } }
+  const status = { state: 'success', phase: 'complete', capturedAt: timestamp(), articles: { completed: allContent.length, total: allContent.length }, media: { completed: images.length, total: images.length, failed: failedMedia } }
   await writeFile(new URL('index.json', stagingOutputDirectory), JSON.stringify({ generatedAt: status.capturedAt, site, sync: status, pages: index }))
-  await writeFile(new URL('manifest.json', stagingOutputDirectory), JSON.stringify({ articles: articles.length, media: images.length, failedMedia, capturedAt: status.capturedAt }, null, 2))
+  await writeFile(new URL('manifest.json', stagingOutputDirectory), JSON.stringify({ articles: allContent.length, media: images.length, failedMedia, specialPages: specialArticles.length, capturedAt: status.capturedAt }, null, 2))
   await rm(outputDirectory, { recursive: true, force: true })
   await rm(mediaDirectory, { recursive: true, force: true })
   await rename(stagingOutputDirectory, outputDirectory)
   await rename(stagingMediaDirectory, mediaDirectory)
   await writeStatus(status)
-  console.log(`Complete: ${articles.length} articles and ${images.length} media files (${images.filter((image) => isVideoMime(image.mime)).length} videos) migrated.`)
+  console.log(`Complete: ${articles.length} articles + ${specialArticles.length} special pages and ${images.length} media files (${images.filter((image) => isVideoMime(image.mime)).length} videos) migrated.`)
 }
 
 main().catch(async (error) => {

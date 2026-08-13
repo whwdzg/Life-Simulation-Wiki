@@ -49,6 +49,14 @@ const renderFailure = (message) => {
 
 const formatTime = (value) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium', hour12: false }).format(new Date(value)) : '尚未完成首次抓取'
 
+const deployPanel = (deploy = {}) => {
+  const branch = (deploy.ref || '').replace(/^refs\/heads\//, '')
+  const shortSha = (deploy.sha || '').slice(0, 7)
+  const repoUrl = deploy.repository ? `https://github.com/${deploy.repository}` : ''
+  const runUrl = deploy.repository && deploy.runId ? `${repoUrl}/actions/runs/${deploy.runId}` : ''
+  return `<section class="sync-status deploy-info"><h2>部署信息</h2><p>${repoUrl ? `<a href="${repoUrl}" target="_blank" rel="noreferrer">${escapeHtml(deploy.repository)}</a>` : '—'}</p><p>分支：${branch || '—'}&#x2003;提交：${shortSha ? (repoUrl ? `<a href="${repoUrl}/commit/${deploy.sha}" target="_blank" rel="noreferrer">${shortSha}</a>` : shortSha) : '—'}</p>${runUrl ? `<p>触发：<a href="${runUrl}" target="_blank" rel="noreferrer">${escapeHtml(deploy.workflow || '')} #${deploy.runNumber || ''}</a></p>` : ''}</section>`
+}
+
 const syncPanel = (sync = {}) => {
   const articles = sync.articles ?? { completed: 0, total: 0 }
   const media = sync.media ?? { completed: 0, total: 0, failed: 0 }
@@ -160,6 +168,13 @@ const start = async () => {
     // Use the status embedded in the index when an older deployment lacks a separate status file.
   }
 
+  let deploy = {}
+  try {
+    deploy = await fetchJson(`${baseUrl}wiki-data/deploy-info.json`)
+  } catch {
+    // deploy-info.json may not exist in older deployments or local dev.
+  }
+
   const theme = applyTheme(source.site)
   const pages = source.pages
   const pagesBySlug = new Map(pages.flatMap((page) => [[page.slug, page], [decodeSlug(page.slug), page]]))
@@ -200,7 +215,7 @@ const start = async () => {
       <header class="wiki-header"><a class="wiki-brand" href="${routeFor(home.slug)}"><img class="wiki-brand-logo" src="${theme.icon}" alt="来福Simulation 标志"><span>来福Simulation Wiki（镜像站）</span></a><button class="mobile-toc-button" type="button" aria-expanded="false">目录</button><nav><a href="${routeFor(home.slug)}">首页</a><button class="all-pages-button" type="button" aria-expanded="false">全部条目</button></nav><form class="wiki-search" role="search"><label class="sr-only" for="wiki-search-input">搜索 Wiki</label><input id="wiki-search-input" type="search" placeholder="搜索这个镜像站"><button type="submit" aria-label="搜索">⌕</button></form></header>
       <div class="wiki-drawer" hidden><div class="drawer-head"><strong>全部条目（${pages.length}）</strong><button class="close-drawer" type="button" aria-label="关闭">×</button></div><div class="page-list">${pageList}</div></div>
       <aside class="mobile-toc-drawer" hidden aria-label="本页目录"><div class="drawer-head"><strong>本页目录</strong><button class="close-mobile-toc" type="button" aria-label="关闭目录">×</button></div><nav>${outline}</nav></aside>
-      <main class="wiki-shell"><article class="wiki-article"><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki 镜像站</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div>${isHome ? syncPanel(sync) : ''}<footer class="article-license">本页为<a href="https://lifesimulation.fandom.com/zh/wiki/%E6%9D%A5%E7%A6%8FSimulation" target="_blank" rel="noreferrer">来福Simulation Wiki</a> 的静态镜像，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。源代码以GPL v3许可协议开源。本站不提供编辑内容功能，也无法完全替代原页面，仅供静态页面浏览。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 镜像条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回镜像首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
+      <main class="wiki-shell"><article class="wiki-article"><div class="article-heading"><p class="article-eyebrow">来福Simulation Wiki 镜像站</p><h1>${escapeHtml(page.title)}</h1></div><div class="article-body">${articleHtml}</div>${isHome ? syncPanel(sync) + deployPanel(deploy) : ''}<footer class="article-license">本页为<a href="https://lifesimulation.fandom.com/zh/wiki/%E6%9D%A5%E7%A6%8FSimulation" target="_blank" rel="noreferrer">来福Simulation Wiki</a> 的静态镜像，除另有注明外，依照 <a href="https://creativecommons.org/licenses/by-sa/3.0/deed.zh-hans" target="_blank" rel="noreferrer">CC BY-SA</a> 许可协议提供。源代码以GPL v3许可协议开源。本站不提供编辑内容功能，也无法完全替代原页面，仅供静态页面浏览。</footer></article><aside class="wiki-sidebar"><section class="wiki-outline"><h2>本页目录</h2><nav>${outline}</nav></section>${quoteHtml ? `<section class="home-quotes">${quoteHtml}</section>` : ''}<section class="wiki-pages"><h2>Wiki 镜像条目</h2><p>共 ${pages.length} 篇迁移文章</p><a href="${routeFor(home.slug)}">返回镜像首页</a><h3>最近条目</h3>${pages.slice(-8).reverse().map((item) => `<a href="${routeFor(item.slug)}">${escapeHtml(item.title)}</a>`).join('')}</section></aside></main>
       <dialog id="search-dialog"><button class="dialog-close" type="button" aria-label="关闭">×</button><h2>搜索 Wiki</h2><form class="dialog-search"><input type="search" placeholder="输入关键词" autofocus><button type="submit">搜索</button></form><div id="search-results"></div></dialog>`
 
     const drawer = document.querySelector('.wiki-drawer')

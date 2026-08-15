@@ -19,16 +19,16 @@ const writeStatus = async (status) => {
 
 const fetchWithRetry = async (url, options = {}) => {
   let lastError
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 30_000)
+    const timeout = setTimeout(() => controller.abort(), 60_000)
     try {
       const response = await fetch(url, { ...options, signal: controller.signal })
       if (response.ok || (response.status >= 400 && response.status < 500)) return response
       throw new Error(`${response.status} ${response.statusText}`)
     } catch (error) {
       lastError = error
-      if (attempt < 3) await wait(750 * (attempt + 1))
+      if (attempt < 5) await wait(2000 * (attempt + 1))
     } finally {
       clearTimeout(timeout)
     }

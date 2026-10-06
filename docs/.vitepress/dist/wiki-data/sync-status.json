@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-08-15T16:07:53.054Z",
+  "state": "failed",
+  "phase": "error",
+  "error": "fetch failed",
+  "articles": {
+    "completed": 0,
+    "total": 0
+  },
+  "media": {
+    "completed": 0,
+    "total": 0,
+    "failed": 0
+  }
+}

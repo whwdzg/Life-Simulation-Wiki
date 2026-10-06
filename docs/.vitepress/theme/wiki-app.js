@@ -1,7 +1,3 @@
-import './style.css'
-
-window.__lifeSimulationWikiStarted = true
-
 const baseUrl = import.meta.env.BASE_URL
 const indexUrl = `${baseUrl}wiki-data/index.json`
 const pageUrl = (page) => `${baseUrl}wiki-data/pages/${page.file ?? `${page.slug}.json`}`
@@ -387,10 +383,7 @@ const start = async () => {
   render()
 }
 
-applyTheme()
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register(new URL('sw.js', window.location.href)))
+export const startWikiApp = async () => {
+  applyTheme()
+  await start()
 }
-
-start()

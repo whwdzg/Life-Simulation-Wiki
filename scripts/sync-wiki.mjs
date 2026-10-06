@@ -3,12 +3,12 @@ import { mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 
 const api = 'https://lifesimulation.fandom.com/zh/api.php'
-const outputDirectory = new URL('../public/wiki-data/', import.meta.url)
-const mediaDirectory = new URL('../public/wiki-assets/', import.meta.url)
-const stagingOutputDirectory = new URL('../public/wiki-data-staging/', import.meta.url)
-const stagingPageDirectory = new URL('../public/wiki-data-staging/pages/', import.meta.url)
-const stagingMediaDirectory = new URL('../public/wiki-assets-staging/', import.meta.url)
-const statusFile = new URL('../public/wiki-data/sync-status.json', import.meta.url)
+const outputDirectory = new URL('../docs/public/wiki-data/', import.meta.url)
+const mediaDirectory = new URL('../docs/public/wiki-assets/', import.meta.url)
+const stagingOutputDirectory = new URL('../docs/public/wiki-data-staging/', import.meta.url)
+const stagingPageDirectory = new URL('../docs/public/wiki-data-staging/pages/', import.meta.url)
+const stagingMediaDirectory = new URL('../docs/public/wiki-assets-staging/', import.meta.url)
+const statusFile = new URL('../docs/public/wiki-data/sync-status.json', import.meta.url)
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const timestamp = () => new Date().toISOString()

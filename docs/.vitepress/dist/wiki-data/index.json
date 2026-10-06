@@ -1,0 +1,21 @@
+{
+  "generatedAt": null,
+  "site": {},
+  "sync": {
+    "state": "pending",
+    "phase": "waiting",
+    "articles": { "completed": 0, "total": 0 },
+    "media": { "completed": 0, "total": 0, "failed": 0 }
+  },
+  "pages": [
+    {
+      "title": "来福Simulation Wiki（镜像站）",
+      "slug": "home",
+      "file": "home.json",
+      "displayTitle": "来福Simulation Wiki（镜像站）",
+      "sections": [],
+      "summary": "镜像站正在同步原 Wiki 内容。",
+      "searchText": "镜像站 正在同步 原 Wiki 内容"
+    }
+  ]
+}

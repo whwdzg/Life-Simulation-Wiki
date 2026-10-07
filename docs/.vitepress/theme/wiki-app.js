@@ -40,9 +40,15 @@ const renderLoading = (title = '正在加载页面', message = '正在获取 Wik
   app.innerHTML = `<main class="load-state loading-state" aria-live="polite"><span class="loading-spinner" aria-hidden="true"></span><h1>${title}</h1><p>${message}</p></main>`
 }
 
-const renderFailure = (message) => {
-  app.innerHTML = `<main class="load-state"><h1>来福Simulation Wiki（镜像站）</h1><p>${message}</p><p>请稍后刷新页面重试。</p><p><button class="reload-page-btn" type="button">刷新重试</button></p></main>`
+const renderFailure = (message, extraHtml = '') => {
+  app.innerHTML = `<main class="load-state"><h1>来福Simulation Wiki（镜像站）</h1><p>${message}</p>${extraHtml}<p>请稍后刷新页面重试。</p><p><button class="reload-page-btn" type="button">刷新重试</button></p></main>`
   app.querySelector('.reload-page-btn')?.addEventListener('click', () => location.reload())
+}
+
+const renderOfflineList = (entries, message) => {
+  const list = (entries || []).map((entry) => `<li><a href="${routeFor(entry.slug)}">${escapeHtml(entry.title)}</a></li>`).join('')
+  const home = entries && entries.length ? routeFor(entries[0].slug) : './#'
+  app.innerHTML = `<main class="load-state"><h1>来福Simulation Wiki（镜像站）</h1><p>${message}</p><h3 style="margin:8px 0 4px">离线可浏览的条目</h3><nav class="offline-entry-list"><ol>${list || '<li>无缓存条目</li>'}</ol></nav><p><a href="${home}">打开镜像首页</a></p></main>`
 }
 
 const formatTime = (value) => value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium', hour12: false }).format(new Date(value)) : '尚未完成首次抓取'

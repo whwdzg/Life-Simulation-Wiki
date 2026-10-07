@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { extname, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const api = 'https://lifesimulation.fandom.com/zh/api.php'
 const outputDirectory = new URL('../docs/public/wiki-data/', import.meta.url)
@@ -329,6 +330,74 @@ const main = async () => {
   await rename(stagingMediaDirectory, mediaDirectory)
   await writeStatus(status)
   console.log(`Complete: ${content.length} articles + ${specialArticles.length} special pages and ${images.length} media files (${images.filter((image) => isVideoMime(image.mime)).length} videos) migrated. ${skippedPages.length} pages skipped.`)
+
+  // Emit one lightweight Markdown page per article so the VitePress site has
+  // real routes.  Deep links therefore keep working on refresh/deep-link, and
+  // the service worker can offer a cached entry list for offline browsing.
+  const wikiHtmlDir = new URL('../docs/wiki-pages/', import.meta.url)
+  const pageList = []
+  try {
+    await rm(wikiHtmlDir, { recursive: true, force: true })
+    await mkdir(wikiHtmlDir, { recursive: true })
+    for (const page of index) {
+      const slug = decodeURIComponent(page.slug)
+      const title = page.displayTitle || page.title
+      const desc = (page.summary || page.searchText || '').slice(0, 180)
+      const source = `---
+title: ${JSON.stringify(title)}
+layout: no-layout
+wikiSlug: ${JSON.stringify(page.slug)}
+wikiFile: ${JSON.stringify(page.file)}
+description: ${JSON.stringify(desc)}
+---
+`
+      const file = new URL(`${slug}.md`, wikiHtmlDir)
+      await writeFile(file, source)
+      pageList.push({ title, slug: page.slug })
+      console.log(`  page: /wiki/${slug}.md`)
+    }
+  } catch (error) {
+    console.warn(`Skipping Markdown page generation: ${error.message}`)
+  }
+
+  // Copy the site payload (wiki-data + wiki-assets + generated pages) to the
+  // VitePress output dist/ so the deploy artifact is self-contained.
+  const distDir = new URL('../dist/', import.meta.url)
+  try {
+    await mkdir(distDir, { recursive: true })
+    // wiki-data
+    const wikiData = new URL(`${distDir}wiki-data/`)
+    await rm(wikiData, { recursive: true, force: true })
+    await mkdir(wikiData, { recursive: true })
+    for (const file of await readdir(outputDirectory, { withFileTypes: true })) {
+      if (file.isDirectory()) continue
+      await copyFile(new URL(`${file.name}`, outputDirectory), new URL(`${file.name}`, wikiData))
+    }
+    // pages
+    const wikiPages = new URL(`${distDir}wiki-data/pages/`)
+    await mkdir(wikiPages, { recursive: true })
+    const sourcePages = new URL('pages/', outputDirectory)
+    if (await stat(sourcePages).then(() => true, () => false)) {
+      for (const file of await readdir(sourcePages, { withFileTypes: true })) {
+        if (file.isDirectory()) continue
+        await copyFile(new URL(`${file.name}`, sourcePages), new URL(`${file.name}`, wikiPages))
+      }
+    }
+    // wiki-assets
+    const wikiAssets = new URL(`${distDir}wiki-assets/`)
+    await rm(wikiAssets, { recursive: true, force: true })
+    await mkdir(wikiAssets, { recursive: true })
+    try {
+      for (const file of await readdir(mediaDirectory, { withFileTypes: true })) {
+        if (file.isDirectory()) continue
+        await copyFile(new URL(`${file.name}`, mediaDirectory), new URL(`${file.name}`, wikiAssets))
+      }
+    } catch {
+      /* no media */
+    }
+  } catch (error) {
+    console.warn(`Skipping dist copy: ${error.message}`)
+  }
 }
 
 main().catch(async (error) => {

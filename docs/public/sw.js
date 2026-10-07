@@ -42,7 +42,22 @@ const offlineFallback = async () => {
   )
 }
 
-self.addEventListener('install', () => {
+const PRECACHE = [
+  './',
+  './index.html',
+  './offline.html',
+  './favicon.svg',
+  './icons.svg',
+  './manifest.json',
+  './wiki-data/index.json',
+  './wiki-data/sync-status.json',
+]
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(cacheName)
+      .then((cache) => Promise.allSettled(PRECACHE.map((url) => cache.add(url))))
+  )
   self.skipWaiting()
 })
 

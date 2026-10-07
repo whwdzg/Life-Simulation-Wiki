@@ -2,7 +2,29 @@ const baseUrl = import.meta.env.BASE_URL
 const indexUrl = `${baseUrl}wiki-data/index.json`
 const pageUrl = (page) => `${baseUrl}wiki-data/pages/${page.file ?? `${page.slug}.json`}`
 const statusUrl = `${baseUrl}wiki-data/sync-status.json`
-const app = document.querySelector('#app')
+const getHost = () => document.querySelector('#app') // 每次重新查询 host；#app 可能由 SPA 或 index.md 提供
+const outerShell = {
+  set innerHTML(value) {
+    const target = getHost()
+    if (target) target.innerHTML = value
+  },
+  querySelector(selector) {
+    return getHost()?.querySelector(selector)
+  }
+}
+// 兼容使用别名：代码中现有的 `app` 引用会被重新映射到 host（返回值可能被延后获取）
+const app = new Proxy({}, {
+  set: (target, prop, value) => {
+    if (prop === 'innerHTML') { outerShell.innerHTML = value; return true }
+    target[prop] = value
+    return true
+  },
+  get: (target, prop) => {
+    if (prop === 'innerHTML') return outerShell.innerHTML
+    if (prop === 'querySelector') return (selector) => outerShell.querySelector(selector)
+    return target[prop]
+  }
+})
 const fallbackTheme = {
   background: 'https://static.wikia.nocookie.net/lifesimulation/images/b/b5/Site-background-light/revision/latest?cb=20251002115419&path-prefix=zh',
   icon: 'https://static.wikia.nocookie.net/lifesimulation/images/e/e6/Site-logo.png/revision/latest?cb=20251002013153&path-prefix=zh',

@@ -157,3 +157,33 @@ nav { flex: none; } nav a { white-space: nowrap; }
 /* 保留portable-infobox样式 */
 .article-body .portable-infobox { margin: 0 0 18px; padding: 12px; border: 1px solid var(--line); background: var(--page-bg); }
 .article-body .portable-infobox .pi-title { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+
+/* =========== VitePress 壳隐藏：本镜像站是纯 SPA，路由全在 #/wiki/ 下 =========== */
+.mirror-shell .VPSidebar,
+.mirror-shell .VPNav,
+.mirror-shell .VPHome,
+.mirror-shell .VPFooter,
+.mirror-shell .VPLocalNav,
+.mirror-shell .VPDoc .outline,
+.mirror-shell .VPDoc .content .outline { display: none !important; margin: 0 !important; padding: 0 !important; }
+.mirror-shell .container { padding-top: 0 !important; }
+.mirror-shell {
+  --vp-nav-height: 0px;
+}
+.mirror-shell .VPDoc .has-sidebar .container,
+.mirror-shell .VPDoc .container .content,
+.mirror-shell .VPDoc .container .content .vp-doc {
+  max-width: 100% !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+.mirror-app { width: 100%; }
+.mirror-app .wiki-header { position: sticky; top: 0; }
+
+/* docs/wiki-pages 下的条目页：VitePress 会渲染默认布局，我们只需要一个空壳 + #app。
+   强制隐藏该路由下的内容，保证 SPA 接管。 */
+.mirror-shell .VPDoc .content .vp-doc:empty,
+.mirror-shell .VPDoc .content .vp-doc > :not(#app) { display: none !important; }
+/* 让 VitePress 生成的 "Dry" 机器人提示、主题装饰都不影响读取 */
+.mirror-shell .the-beat,
+.mirror-shell [data-v-app-empty-placeholder] { display: none !important; }

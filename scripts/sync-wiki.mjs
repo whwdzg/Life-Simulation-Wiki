@@ -331,31 +331,30 @@ const main = async () => {
   await writeStatus(status)
   console.log(`Complete: ${content.length} articles + ${specialArticles.length} special pages and ${images.length} media files (${images.filter((image) => isVideoMime(image.mime)).length} videos) migrated. ${skippedPages.length} pages skipped.`)
 
-  // Emit one lightweight Markdown page per article so the VitePress site has
-  // real routes.  Deep links therefore keep working on refresh/deep-link, and
-  // the service worker can offer a cached entry list for offline browsing.
+  // 输出一个轻量级的 Markdown 页面（frontmatter: layout: false）：
+  //  1. 使 VitePress 为每个条目生成真实路由（刷新/直链不 404）；
+  //  2. body 里放置 <main id="app"> 本镜像 SPA 的锚点（与首页一致）。
   const wikiHtmlDir = new URL('../docs/wiki-pages/', import.meta.url)
-  const pageList = []
   try {
     await rm(wikiHtmlDir, { recursive: true, force: true })
     await mkdir(wikiHtmlDir, { recursive: true })
     for (const page of index) {
       const slug = decodeURIComponent(page.slug)
       const title = page.displayTitle || page.title
-      const desc = (page.summary || page.searchText || '').slice(0, 180)
+      const file = new URL(`${slug}.md`, wikiHtmlDir)
       const source = `---
 title: ${JSON.stringify(title)}
-layout: no-layout
+layout: false
 wikiSlug: ${JSON.stringify(page.slug)}
-wikiFile: ${JSON.stringify(page.file)}
-description: ${JSON.stringify(desc)}
 ---
+
+<main id="app" class="mirror-app"></main>
 `
-      const file = new URL(`${slug}.md`, wikiHtmlDir)
+      // slug 已经过 encodeURIComponent，不含斜杠，保持扁平结构。
       await writeFile(file, source)
-      pageList.push({ title, slug: page.slug })
-      console.log(`  page: /wiki/${slug}.md`)
+      console.log(`  page: /wiki/${page.slug}.html`)
     }
+    // 为所有条目提供统一的重定向 → 只需要一个 index.html，SPA 跳转会处理
   } catch (error) {
     console.warn(`Skipping Markdown page generation: ${error.message}`)
   }

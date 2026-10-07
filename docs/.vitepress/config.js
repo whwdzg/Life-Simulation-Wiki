@@ -7,6 +7,15 @@ export default defineConfig({
   lastUpdated: false,
   cleanUrls: true,
   ignoreDeadLinks: true,
+  // CI 的 workflow 直接上传根目录 dist/（upload-pages-artifact path: dist）。
+  // 相对 srcDir（docs/）解析，即仓库根目录 dist/。
+  outDir: '../dist',
+  vite: {
+    build: {
+      // dist/ 位于 srcDir 之外，强制清空旧产物（避免残留 Vite 时代构建文件混入）。
+      emptyOutDir: true
+    }
+  },
   head: [
     ['meta', { name: 'viewport', content: 'width=device-width, initial-scale=1.0' }],
     ['meta', { name: 'theme-color', content: '#00665a', media: '(prefers-color-scheme: light)' }],

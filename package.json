@@ -1,15 +1,17 @@
 {
-  "name": "life-simulation-wiki",
-  "version": "0.0.0",
+  "name": "lifesimulation-wiki-mirror",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "sync:wiki": "node scripts/sync-wiki.mjs",
-    "build": "vite build",
-    "preview": "vite preview"
+  "description": "每小时自动更新的来福Simulation Wiki 全量静态镜像站",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=20"
   },
-  "devDependencies": {
-    "vite": "^8.2.0"
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "media:signature": "node scripts/media-signature.mjs"
   }
 }

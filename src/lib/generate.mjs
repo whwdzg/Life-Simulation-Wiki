@@ -429,6 +429,7 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
 
   await mkdir(config.outDir, { recursive: true })
   await cp(ASSETS_DIR, join(config.outDir, 'assets'), { recursive: true })
+  await cp(join(ASSETS_DIR, 'sw.js'), join(config.outDir, 'sw.js'))
   await writeFile(join(config.outDir, '.nojekyll'), '')
 
   const stats = {

@@ -520,6 +520,31 @@ function setupMisc() {
   })
 }
 
+/* --------------------------------------------------------------------------
+   Legacy service worker cleanup
+   -------------------------------------------------------------------------- */
+
+function setupLegacyServiceWorker() {
+  if (!('serviceWorker' in navigator)) return
+  navigator.serviceWorker
+    .getRegistrations()
+    .then(async (registrations) => {
+      let removed = false
+      for (const registration of registrations) {
+        const scriptUrl = registration.active?.scriptURL || registration.waiting?.scriptURL || registration.installing?.scriptURL || ''
+        if (scriptUrl.endsWith('/sw.js')) {
+          await registration.unregister().catch(() => {})
+          removed = true
+        }
+      }
+      if (removed && 'caches' in window) {
+        const keys = await caches.keys().catch(() => [])
+        await Promise.all(keys.map((key) => caches.delete(key).catch(() => false)))
+      }
+    })
+    .catch(() => {})
+}
+
 const start = () => {
   setupTheme()
   setupInlineSurfaces()
@@ -534,6 +559,7 @@ const start = () => {
   setupTocSpy()
   setupBackToTop()
   setupMisc()
+  setupLegacyServiceWorker()
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)

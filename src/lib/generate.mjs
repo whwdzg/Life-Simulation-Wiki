@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { SITE, namespaceLabel } from './config.mjs'
 import {
   MediaMirror,
+  isMirrorableMediaUrl,
   normalizeMediaUrl,
   thumbnailUrl,
 } from './assets.mjs'
@@ -103,11 +104,15 @@ function safeJson(value) {
 
 export async function generateSite({ config, data, buildStartedAt, logger = console }) {
   const { siteinfo, pages, images, fileUsage, categoryInfo, statistics, mainPage, projectName } = data
+  const customStyles = data.customStyles ?? []
+  const customCssSource = customStyles
+    .map((style) => `/* ${style.title} */\n${style.content}`)
+    .join('\n\n')
   const now = new Date()
   const startedAt = buildStartedAt instanceof Date ? buildStartedAt.getTime() : Number(buildStartedAt ?? now)
   const styleSource = await readFile(join(ASSETS_DIR, 'style.css'), 'utf8')
   const scriptSource = await readFile(join(ASSETS_DIR, 'app.js'), 'utf8')
-  const buildId = `${now.toISOString().slice(0, 13).replace(/[-:T]/g, '')}-${shortHash(styleSource + scriptSource, 8)}`
+  const buildId = `${now.toISOString().slice(0, 13).replace(/[-:T]/g, '')}-${shortHash(styleSource + scriptSource + customCssSource, 8)}`
   const build = {
     id: buildId,
     startedAt: new Date(startedAt).toISOString(),
@@ -215,6 +220,11 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     if (large) addAsset(large)
     if (small) addAsset(small)
   }
+  for (const style of customStyles) {
+    for (const match of style.content.matchAll(/url\(\s*(["']?)(.*?)\1\s*\)/gi)) {
+      if (isMirrorableMediaUrl(match[2])) addAsset(normalizeMediaUrl(match[2]))
+    }
+  }
   const uploadedLogo = images.find((image) => /^Site-logo\.(png|jpe?g|svg|webp)$/i.test(image.name))
   const uploadedFavicon = images.find((image) => /^Site-favicon\.(ico|png)$/i.test(image.name))
   const logoSource = normalizeMediaUrl(uploadedLogo?.url || siteinfo.general.logo)
@@ -263,6 +273,12 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     favicon: resolvedFavicon,
   }
   if (!site.favicon) site.favicon = `${config.base}/assets/favicon.svg`
+
+  const wikiCss = customCssSource.replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (match, quote, value) => {
+    const normalized = normalizeMediaUrl(value)
+    const local = normalized ? media.urlFor(normalized) : null
+    return local ? `url("${local}")` : match
+  })
 
   const rewriter = createHtmlRewriter({
     resolveHref: resolver.resolve,
@@ -430,6 +446,7 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
   await mkdir(config.outDir, { recursive: true })
   await cp(ASSETS_DIR, join(config.outDir, 'assets'), { recursive: true })
   await cp(join(ASSETS_DIR, 'sw.js'), join(config.outDir, 'sw.js'))
+  await writeFile(join(config.outDir, 'assets', 'wiki-common.css'), `${wikiCss.trim()}\n`)
   await writeFile(join(config.outDir, '.nojekyll'), '')
 
   const stats = {

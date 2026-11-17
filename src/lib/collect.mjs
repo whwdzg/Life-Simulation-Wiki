@@ -143,6 +143,20 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
     categoryInfo = await api.categoryInfo(categoryPages.map((page) => page.title))
   }
 
+  logger.info('读取站点自定义 CSS…')
+  const customStyles = []
+  for (const title of ['MediaWiki:Common.css', 'MediaWiki:Wikia.css', 'MediaWiki:Mobile.css']) {
+    try {
+      const style = await api.pageContent(title)
+      if (style.content.trim()) {
+        customStyles.push({ title, content: style.content })
+        logger.info(`  ${title}：${style.content.length} 字节`)
+      }
+    } catch (error) {
+      logger.warn(`读取 ${title} 失败：${error.message}`)
+    }
+  }
+
   const mainPage = siteinfo.general.mainpage
   return {
     api,
@@ -154,6 +168,7 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
     images,
     fileUsage,
     categoryInfo,
+    customStyles,
     parseFailures: failures,
     requestCount: api.requestCount,
     collectedAt: new Date().toISOString(),

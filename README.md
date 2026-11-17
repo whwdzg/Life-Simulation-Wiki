@@ -22,6 +22,7 @@ GitHub Actions（每小时整点）
 几个关键点：
 
 - **模板支持**：不使用浏览器端 JavaScript 去请求源站，而是在构建时让 MediaWiki 渲染模板；模板页面本身也会展示维基文本源代码。
+- **站点自定义 CSS**：每次构建读取 `MediaWiki:Common.css`、`MediaWiki:Wikia.css`、`MediaWiki:Mobile.css`，因此 `rainbow-text-hover`、`bounce-text`、`spoiler-blur`、`freeze-ice`、页签和头像悬停等模板效果会被保留。
 - **图片与媒体**：源站 CDN 上的原图、页面缩略图、文件页预览图都会下载到 `dist/media/`，构建后不再依赖 Fandom。
 - **增量媒体缓存**：`.cache/media` 通过 `actions/cache` 持久化，并用媒体清单签名作为缓存键；没有变更时不会重复下载约 120 MB 媒体（源站原文件合计约 260 MB，CDN 通常返回 WebP）。
 - **静态搜索**：生成 `data/search.json`，浏览器本地搜索标题、摘要与正文。

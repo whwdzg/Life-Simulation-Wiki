@@ -412,22 +412,22 @@ html[data-theme="dark"] .theme-toggle .icon:nth-child(2) {
   font-size: 13px;
 }
 
-.toc {
+.page-toc {
   margin: 0;
   padding: 0;
   list-style: none;
   font-size: 13.5px;
 }
 
-.toc__item--level-3 {
+.page-toc__item--level-3 {
   padding-left: 13px;
 }
 
-.toc__item--level-4 {
+.page-toc__item--level-4 {
   padding-left: 26px;
 }
 
-.toc a {
+.page-toc a {
   display: block;
   padding: 4px 8px;
   color: var(--text-soft);
@@ -437,13 +437,13 @@ html[data-theme="dark"] .theme-toggle .icon:nth-child(2) {
   line-height: 1.45;
 }
 
-.toc a:hover {
+.page-toc a:hover {
   background: var(--surface-2);
   color: var(--accent-strong);
   border-left-color: var(--accent);
 }
 
-.toc a.is-active {
+.page-toc a.is-active {
   color: var(--accent-strong);
   border-left-color: var(--accent);
   background: var(--accent-soft);
@@ -1180,6 +1180,10 @@ html[data-theme="dark"] .wiki-content .inline-light-surface {
 
 html[data-theme="dark"] .wiki-content .inline-light-surface a {
   color: var(--link) !important;
+}
+
+html[data-theme="dark"] .freeze-ice {
+  color: var(--text);
 }
 
 .wiki-content .mbox__content {

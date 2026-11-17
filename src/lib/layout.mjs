@@ -59,12 +59,12 @@ export function renderToc(sections, { title = '本页目录' } = {}) {
   const links = items
     .map(
       (section) =>
-        `<li class="toc__item toc__item--level-${section.level}"><a href="#${encodeURIComponent(section.anchor)}">${escapeHtml(stripTags(section.line))}</a></li>`,
+        `<li class="page-toc__item page-toc__item--level-${section.level}"><a href="#${encodeURIComponent(section.anchor)}">${escapeHtml(stripTags(section.line))}</a></li>`,
     )
     .join('')
   return `<section class="sidebar-block toc-block">
   <h2>${escapeHtml(title)}</h2>
-  <nav aria-label="本页目录"><ul class="toc">${links}</ul></nav>
+  <nav aria-label="本页目录"><ul class="page-toc">${links}</ul></nav>
 </section>`
 }
 
@@ -241,8 +241,9 @@ export function renderDocument({
   <link rel="icon" href="${site.favicon || `${config.base}/assets/favicon.svg`}">
   <link rel="apple-touch-icon" href="${logo}">
   <link rel="stylesheet" href="${config.base}/assets/style.css?v=${encodeURIComponent(build.id)}">
+  <link rel="stylesheet" href="${config.base}/assets/wiki-common.css?v=${encodeURIComponent(build.id)}">
   ${headExtra}
-  <script>(function(){try{var t=localStorage.getItem('wiki-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('wiki-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;document.documentElement.classList.toggle('theme-fandomdesktop-dark',t==='dark');}catch(e){}})();</script>
 </head>
 <body class="${escapeHtml(bodyClass)}">
   <a class="skip-link" href="#main">跳到正文</a>

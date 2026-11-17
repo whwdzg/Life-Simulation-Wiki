@@ -164,6 +164,24 @@ export class WikiApi {
     return result
   }
 
+  async pageContent(title) {
+    const data = await this.request({
+      action: 'query',
+      prop: 'revisions',
+      rvprop: 'content|timestamp',
+      rvslots: 'main',
+      titles: title,
+      redirects: '0',
+    })
+    const page = data.query?.pages?.[0]
+    const revision = page?.revisions?.[0]
+    return {
+      missing: Boolean(page?.missing) || !revision,
+      content: revision?.slots?.main?.content ?? '',
+      timestamp: revision?.timestamp ?? '',
+    }
+  }
+
   async parse(title) {
     const data = await this.request({
       action: 'parse',

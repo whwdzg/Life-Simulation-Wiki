@@ -33,6 +33,7 @@ function setupTheme() {
   button.addEventListener('click', () => {
     const next = root.dataset.theme === 'dark' ? 'light' : 'dark'
     root.dataset.theme = next
+    root.classList.toggle('theme-fandomdesktop-dark', next === 'dark')
     try {
       localStorage.setItem('wiki-theme', next)
     } catch {
@@ -461,7 +462,7 @@ function setupLightbox() {
    -------------------------------------------------------------------------- */
 
 function setupTocSpy() {
-  const links = qsa('.toc a[href^="#"]')
+  const links = qsa('.page-toc a[href^="#"]')
   if (!links.length) return
   const map = new Map()
   for (const link of links) {

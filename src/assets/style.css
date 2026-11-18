@@ -1947,6 +1947,195 @@ html[data-theme="dark"] .freeze-ice {
   line-height: 1.5;
 }
 
+/* --------------------------------------------------------------------------
+   Fandom Discussions board
+   -------------------------------------------------------------------------- */
+
+.discussion-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 16px;
+}
+
+.discussion-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.discussion-filter span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.discussion-filter:hover {
+  border-color: var(--border-strong);
+}
+
+.discussion-filter.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 650;
+}
+
+.discussion-thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.discussion-thread {
+  padding: 15px 17px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+.discussion-thread.is-hidden {
+  display: none;
+}
+
+.discussion-thread__head {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.discussion-thread__head h2 {
+  margin: 5px 0 5px;
+  padding: 0;
+  border: 0;
+  font-size: 1.25em;
+}
+
+.discussion-forum {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.discussion-thread__meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.discussion-post {
+  padding: 8px 0;
+}
+
+.discussion-post--reply {
+  padding: 9px 0 9px 14px;
+  border-left: 2px solid var(--border);
+}
+
+.discussion-post__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.discussion-avatar {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.discussion-avatar--fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.discussion-author {
+  color: var(--text-soft);
+  font-weight: 650;
+}
+
+.discussion-author a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.discussion-author a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.discussion-post__body {
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.discussion-post__body p {
+  margin: 0 0 0.5em;
+}
+
+.discussion-post__body p:last-child {
+  margin-bottom: 0;
+}
+
+.discussion-post__body a {
+  color: var(--link);
+}
+
+.discussion-post__body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.discussion-replies {
+  margin: 5px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.discussion-no-replies,
+.discussion-source {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.discussion-source a {
+  color: var(--link);
+}
+
+.discussion-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .redirect-box {
   margin: 20px 0;
   padding: 20px 22px;

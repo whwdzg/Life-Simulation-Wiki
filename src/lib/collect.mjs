@@ -178,6 +178,15 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
   })
   logger.info(`  评论接口返回 ${commentsTotal} 条（源站未启用评论时为 0）`)
 
+  logger.info('读取讨论版…')
+  let discussion = { threads: [], forums: [], posts: [], threadCount: 0, postCount: 0 }
+  try {
+    discussion = await api.discussions()
+    logger.info(`  讨论版：${discussion.threadCount} 个主题、${discussion.postCount} 条帖子`)
+  } catch (error) {
+    logger.warn(`读取讨论版失败：${error.message}`)
+  }
+
   logger.info('读取站点自定义 CSS…')
   const customStyles = []
   for (const title of ['MediaWiki:Common.css', 'MediaWiki:Wikia.css', 'MediaWiki:Mobile.css']) {
@@ -204,6 +213,7 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
     fileUsage,
     categoryInfo,
     categoryMembers,
+    discussion,
     customStyles,
     parseFailures: failures,
     requestCount: api.requestCount,

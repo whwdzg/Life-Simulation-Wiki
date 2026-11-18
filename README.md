@@ -36,6 +36,7 @@
 | 搜索 | 浏览器本地全文搜索，无需第三方服务 |
 | 模板 | MediaWiki 服务端展开 + 源站自定义 CSS |
 | 互动地图 | 1 张地图、26 个标记（随源站变化） |
+| 讨论版 | 3 个主题、8 条回复（随源站变化） |
 | 许可 | 内容 CC BY-SA 3.0，代码 GPL-3.0 |
 
 ## 特性
@@ -47,6 +48,7 @@
 - **完整的静态导航**：首页、全部页面、模板与模块、媒体库、分类、最近更新、同步统计、关于页面、404 和随机页面全部静态生成。
 - **分类成员列表**：构建时通过 `list=categorymembers` 抓取每个分类的页面、子分类和文件，生成本地链接；空分类会显示明确提示。
 - **互动地图**：解析 InteractiveMaps 的 JSON 数据，静态渲染地图图片、分类图例、标记、标记详情、缩放/拖动和分类筛选；地图图片文件缺失时会按坐标范围回退到匹配尺寸的已上传图片。
+- **讨论版快照**：通过 Fandom Discussions API 抓取主题、板块、作者、时间、正文与回复，生成可筛选的 `/discussions/` 静态讨论版；页面同时提供原站讨论链接。
 - **页面评论（尽力抓取）**：尝试调用 Fandom `ArticleCommentsController` 获取条目评论、作者、时间与回复；源站未启用评论或接口返回空时，页面会显示空状态并链接到原站评论区。
 - **站内搜索**：构建时生成 `data/search.json`，支持标题、摘要与正文搜索，键盘操作和移动端均可用。
 - **主题背景同步**：构建时读取源站 `Site-background-light` / `Site-background-dark`，浅色和深色主题分别使用对应背景图，并叠加半透明内容面板保证可读性。
@@ -67,13 +69,19 @@
 
 <p align="center"><sub>互动地图：分类筛选 · 缩放/拖动 · 标记详情 · 标记列表</sub></p>
 
+<p align="center">
+  <img src="docs/screenshots/discussions.png" alt="Fandom Discussions 讨论版快照：主题、板块、作者与回复" width="90%">
+</p>
+
+<p align="center"><sub>讨论版：板块筛选 · 主题正文 · 回复 · 原站链接</sub></p>
+
 ## 工作方式
 
 ```text
 GitHub Actions（每小时整点）
   ├─ 读取 siteinfo / allpages / 最新修订 / 维基文本
   ├─ action=parse 渲染页面（模板、解析器函数在服务端展开）
-  ├─ 解析 InteractiveMaps 地图、分类成员与页面评论
+  ├─ 解析 InteractiveMaps 地图、分类成员、页面评论与 Discussions 讨论版
   ├─ 读取 MediaWiki:Common.css / Wikia.css / Mobile.css
   ├─ 读取 Site-background-light / Site-background-dark 背景图
   ├─ 收集图片、缩略图、音视频 URL 并下载到 .cache/media
@@ -177,6 +185,7 @@ src/assets/sw.js                     旧版 Service Worker 注销器
 - 动态变量、随机名言等保存的是构建时快照。
 - 依赖实时数据库的特殊页面链接会回退到原站。
 - 页面评论为尽力抓取：当前源站的 ArticleComments 接口返回空数据，因此条目页会显示“暂无评论/评论未启用”的空状态；接口恢复后无需改代码即可自动显示评论。
+- 讨论版为构建时只读快照，不包含登录、点赞、回复等交互；需要参与讨论时请前往原站 Discussions。
 - 互动地图的源站图片文件缺失时会按地图坐标范围自动匹配同尺寸图片；若仍找不到底图，标记坐标仍可浏览但没有地图底图。
 - 源站若启用验证码、Cloudflare 挑战或 API 限流，抓取可能失败；工作流不会覆盖上一次成功部署的站点。
 

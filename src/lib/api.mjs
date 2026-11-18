@@ -316,6 +316,83 @@ export class WikiApi {
     throw lastError instanceof Error ? lastError : new ApiError('Article comments request failed')
   }
 
+  async wikiaHal(parameters, { timeout = 30_000 } = {}) {
+    const url = new URL(this.apiUrl.replace(/\/api\.php$/, '/wikia.php'))
+    for (const [key, value] of Object.entries(parameters)) {
+      if (value !== undefined && value !== null) url.searchParams.set(key, String(value))
+    }
+    let lastError
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await fetch(url, {
+          headers: { 'user-agent': this.userAgent, accept: 'application/hal+json, application/json;q=0.9' },
+          signal: AbortSignal.timeout(timeout),
+        })
+        if (response.status === 404) return null
+        if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`)
+        return response.json()
+      } catch (error) {
+        lastError = error
+        if (attempt === 0) await delay(1_000)
+      }
+    }
+    throw lastError instanceof Error ? lastError : new ApiError('Fandom wikia.php request failed')
+  }
+
+  async discussions() {
+    const threads = []
+    let forums = []
+    let threadCount = 0
+    let postCount = 0
+    for (let page = 0; page < 20; page += 1) {
+      const data = await this.wikiaHal({
+        controller: 'DiscussionThread',
+        method: 'getThreads',
+        limit: '25',
+        page: String(page),
+        responseGroup: 'full',
+        sortKey: 'creation_date',
+        sortDirection: 'descending',
+      })
+      if (!data) break
+      threads.push(...(data._embedded?.threads ?? []))
+      forums = data._embedded?.forums ?? forums
+      threadCount = Number(data.threadCount) || threads.length
+      postCount = Number(data.postCount) || postCount
+      if (!data._links?.next || threads.length >= threadCount) break
+    }
+    if (!threads.length) return { threads: [], forums, posts: [], threadCount: 0, postCount: 0 }
+
+    const ids = new Set(threads.map((thread) => String(thread.id)))
+    const posts = []
+    for (let page = 0; page < 20; page += 1) {
+      const data = await this.wikiaHal({
+        controller: 'DiscussionPost',
+        method: 'getPosts',
+        limit: '25',
+        page: String(page),
+        responseGroup: 'full',
+        reported: 'false',
+        viewableOnly: 'true',
+      })
+      if (!data) break
+      posts.push(...(data._embedded?.['doc:posts'] ?? []))
+      if (!data._links?.next) break
+    }
+    const seen = new Set()
+    return {
+      threads,
+      forums,
+      posts: posts.filter((post) => {
+        if (!ids.has(String(post.threadId)) || seen.has(post.id)) return false
+        seen.add(post.id)
+        return true
+      }),
+      threadCount,
+      postCount,
+    }
+  }
+
   async recentChanges(limit = 50) {
     const data = await this.request({
       action: 'query',

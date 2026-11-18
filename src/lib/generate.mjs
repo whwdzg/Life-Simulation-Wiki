@@ -113,6 +113,81 @@ function walkComments(comments) {
   return out
 }
 
+function adfInline(nodes) {
+  return (nodes ?? [])
+    .map((node) => {
+      if (node?.type === 'text') {
+        let text = escapeHtml(node.text ?? '')
+        for (const mark of node.marks ?? []) {
+          if (mark.type === 'strong') text = `<strong>${text}</strong>`
+          else if (mark.type === 'em') text = `<em>${text}</em>`
+          else if (mark.type === 'code') text = `<code>${text}</code>`
+          else if (mark.type === 'strike') text = `<s>${text}</s>`
+          else if (mark.type === 'link' && mark.attrs?.href) {
+            text = `<a href="${escapeHtml(mark.attrs.href)}" target="_blank" rel="noopener noreferrer">${text}</a>`
+          }
+        }
+        return text
+      }
+      if (node?.type === 'hardBreak') return '<br>'
+      if (node?.type === 'mention') return `@${escapeHtml(node.attrs?.text ?? node.attrs?.id ?? '')}`
+      if (node?.type === 'emoji') return escapeHtml(node.attrs?.text ?? '')
+      if (node?.content) return adfInline(node.content)
+      return ''
+    })
+    .join('')
+}
+
+function adfBlock(node) {
+  if (!node) return ''
+  switch (node.type) {
+    case 'paragraph':
+      return `<p>${adfInline(node.content)}</p>`
+    case 'heading':
+      return `<h${Math.min(4, Number(node.attrs?.level) || 3)}>${adfInline(node.content)}</h${Math.min(4, Number(node.attrs?.level) || 3)}>`
+    case 'blockquote':
+      return `<blockquote>${(node.content ?? []).map(adfBlock).join('')}</blockquote>`
+    case 'codeBlock':
+      return `<pre><code>${escapeHtml((node.content ?? []).map((child) => child.text ?? '').join('\n'))}</code></pre>`
+    case 'rule':
+      return '<hr>'
+    case 'bulletList':
+    case 'orderedList': {
+      const tag = node.type === 'orderedList' ? 'ol' : 'ul'
+      return `<${tag}>${(node.content ?? []).map((item) => `<li>${(item.content ?? []).map(adfBlock).join('')}</li>`).join('')}</${tag}>`
+    }
+    case 'listItem':
+      return (node.content ?? []).map(adfBlock).join('')
+    case 'mediaGroup':
+    case 'mediaSingle':
+      return (node.content ?? []).map(adfBlock).join('')
+    case 'media': {
+      const url = node.attrs?.url
+      return url ? `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">查看附件</a></p>` : ''
+    }
+    default:
+      return node.content ? node.content.map(adfBlock).join('') : ''
+  }
+}
+
+function discussionContent(item) {
+  const raw = String(item?.rawContent ?? '').trim()
+  if (raw) {
+    return raw
+      .split(/\n{2,}/)
+      .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+      .join('')
+  }
+  const model = item?.jsonModel
+  if (!model) return ''
+  try {
+    const doc = typeof model === 'string' ? JSON.parse(model) : model
+    return (doc.content ?? []).map(adfBlock).join('')
+  } catch {
+    return ''
+  }
+}
+
 function thumbUrlFor(image, width) {
   if (!image?.url) return null
   if (String(image.mime ?? '') === 'image/svg+xml') return image.url
@@ -137,7 +212,7 @@ function safeJson(value) {
 }
 
 export async function generateSite({ config, data, buildStartedAt, logger = console }) {
-  const { siteinfo, pages, images, fileUsage, categoryInfo, categoryMembers, statistics, mainPage, projectName } = data
+  const { siteinfo, pages, images, fileUsage, categoryInfo, categoryMembers, discussion, statistics, mainPage, projectName } = data
   const customStyles = data.customStyles ?? []
   const customCssSource = customStyles
     .map((style) => `/* ${style.title} */\n${style.content}`)
@@ -278,6 +353,15 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
       for (const url of collectAssets(commentText(comment))) assetSet.add(url)
       const avatar = commentAvatar(comment)
       if (isMirrorableMediaUrl(avatar)) addAsset(avatar)
+    }
+  }
+  for (const item of [...(discussion.threads ?? []), ...(discussion.posts ?? [])]) {
+    addAsset(item.createdBy?.avatarUrl ?? item.threadCreatedBy?.avatarUrl ?? '')
+    for (const url of String(item.rawContent ?? '').match(/https:\/\/static\.wikia\.nocookie\.net\/[^\s"'<>]+/g) ?? []) {
+      addAsset(url)
+    }
+    for (const image of item._embedded?.attachments?.[0]?.contentImages ?? []) {
+      addAsset(image.url ?? image.src ?? '')
     }
   }
   for (const image of images) {
@@ -599,6 +683,75 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     }
   }
 
+
+  function discussionAuthorName(author) {
+    const name = String(author?.name ?? '匿名用户')
+    const record = resolver.lookup(`User:${name}`)
+    return record ? `<a href="${pageUrl(record, config.base)}">${escapeHtml(name)}</a>` : escapeHtml(name)
+  }
+
+  function discussionAvatar(author) {
+    const url = normalizeMediaUrl(author?.avatarUrl ?? '')
+    const local = url ? media.urlFor(url) : null
+    if (local) return `<img class="discussion-avatar" src="${escapeHtml(local)}" alt="" loading="lazy" decoding="async">`
+    const initial = String(author?.name ?? '?').slice(0, 1)
+    return `<span class="discussion-avatar discussion-avatar--fallback" aria-hidden="true">${escapeHtml(initial)}</span>`
+  }
+
+  function discussionDateTime(item) {
+    const epoch = item?.creationDate?.epochSecond ?? item?.creationDate?.epoch ?? null
+    if (epoch) return new Date(Number(epoch) * 1000).toISOString()
+    return item?.creationDate ?? ''
+  }
+
+  function discussionPost(post, firstPostId = '') {
+    const content = discussionContent(post)
+    const date = discussionDateTime(post)
+    return `<div class="discussion-post${post.isReply ? ' discussion-post--reply' : ''}">
+  <div class="discussion-post__head">${discussionAvatar(post.createdBy)}<span class="discussion-author">${discussionAuthorName(post.createdBy)}</span>${date ? `<time datetime="${escapeHtml(date)}">${formatDateTime(date)}</time>` : ''}${post.upvoteCount ? `<span class="comment-likes">♥ ${formatNumber(post.upvoteCount)}</span>` : ''}</div>
+  <div class="discussion-post__body">${content || '<p class="discussion-empty">（空内容）</p>'}</div>
+</div>`
+  }
+
+  function discussionThread(thread) {
+    const replies = (discussion.posts ?? [])
+      .filter((post) => String(post.threadId) === String(thread.id) && String(post.id) !== String(thread.firstPostId))
+      .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))
+    const forumName = thread.forumName || '综合讨论'
+    const date = discussionDateTime(thread)
+    return `<article class="discussion-thread" id="thread-${escapeHtml(thread.id)}" data-discussion-thread data-forum="${escapeHtml(forumName)}">
+  <header class="discussion-thread__head">
+    <span class="discussion-forum">${escapeHtml(forumName)}</span>
+    <h2>${escapeHtml(thread.title || '（无标题主题）')}</h2>
+    <p class="discussion-thread__meta">${discussionAuthorName(thread.createdBy)} · ${date ? `<time datetime="${escapeHtml(date)}">${formatDateTime(date)}</time>` : '时间未知'} · ${formatNumber(Math.max(0, replies.length))} 条回复${thread.upvoteCount ? ` · ♥ ${formatNumber(thread.upvoteCount)}` : ''}</p>
+  </header>
+  ${discussionPost({ ...thread, isReply: false }, thread.firstPostId)}
+  ${replies.length ? `<ol class="discussion-replies">${replies.map((reply) => `<li>${discussionPost({ ...reply, isReply: true }, thread.firstPostId)}</li>`).join('')}</ol>` : '<p class="discussion-no-replies">暂无回复。</p>'}
+  <p class="discussion-source"><a href="${escapeHtml(SITE.sourceOrigin + '/zh/f')}" target="_blank" rel="noopener noreferrer">在原站查看讨论</a></p>
+</article>`
+  }
+
+  function renderDiscussions() {
+    const threads = discussion.threads ?? []
+    const threadCount = discussion.threadCount ?? threads.length
+    const postCount = discussion.postCount ?? threads.reduce((sum, thread) => sum + Number(thread.postCount ?? 0), 0)
+    const boardUrl = SITE.sourceOrigin + '/zh/f'
+    if (!threads.length) {
+      return `<p class="index-intro">源站讨论版暂时没有可读取的主题，或 Discussions 接口未返回数据。</p>
+<p><a class="button" href="${boardUrl}" target="_blank" rel="noopener noreferrer">访问原站讨论版</a></p>`
+    }
+    const forums = [...new Set(threads.map((thread) => thread.forumName || '综合讨论'))]
+    const filterButtons = [
+      `<button class="discussion-filter is-active" type="button" data-discussion-filter="all">全部 <span>${threads.length}</span></button>`,
+      ...forums.map((forum) => {
+        const count = threads.filter((thread) => (thread.forumName || '综合讨论') === forum).length
+        return `<button class="discussion-filter" type="button" data-discussion-filter="${escapeHtml(forum)}">${escapeHtml(forum)} <span>${count}</span></button>`
+      }),
+    ].join('')
+    return `<p class="index-intro">镜像自 Fandom Discussions，共 ${formatNumber(threadCount)} 个主题、${formatNumber(postCount)} 条回复。内容为构建时快照，回复请前往<a href="${boardUrl}" target="_blank" rel="noopener noreferrer">原站讨论版</a>。</p>
+<div class="discussion-filters" role="group" aria-label="按板块筛选讨论">${filterButtons}</div>
+<div class="discussion-thread-list" data-discussions>${threads.map((thread) => discussionThread(thread)).join('')}</div>`
+  }
 
   function renderCommentItem(comment, depth = 0) {
     const author = commentAuthor(comment)
@@ -963,6 +1116,15 @@ ${mapRecords
     content: mapsContent,
   })
 
+  await writeIndexPage({
+    path: 'discussions',
+    heading: '讨论版',
+    title: '讨论版',
+    description: 'Fandom Discussions 静态快照。',
+    active: 'discussions',
+    content: renderDiscussions(),
+  })
+
   const recentRecords = records
     .filter((record) => record.timestamp)
     .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
@@ -1177,7 +1339,7 @@ ${failureDetails}
       loc: `${config.origin}${config.base}/${encodeUrlPath(record.urlPath)}/`,
       lastmod: record.timestamp ? record.timestamp.slice(0, 10) : build.finishedAt.slice(0, 10),
     })),
-    ...['pages', 'templates', 'media', 'categories', 'maps', 'recent', 'statistics', 'search', 'about'].map((path) => ({
+    ...['pages', 'templates', 'media', 'categories', 'maps', 'discussions', 'recent', 'statistics', 'search', 'about'].map((path) => ({
       loc: `${config.origin}${config.base}/${path}/`,
       lastmod: build.finishedAt.slice(0, 10),
     })),

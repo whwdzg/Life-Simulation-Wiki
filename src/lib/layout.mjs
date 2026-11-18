@@ -8,6 +8,7 @@ export const NAV_ITEMS = [
   { id: 'media', label: '媒体库', path: 'media' },
   { id: 'categories', label: '分类', path: 'categories' },
   { id: 'maps', label: '地图', path: 'maps' },
+  { id: 'discussions', label: '讨论版', path: 'discussions' },
   { id: 'recent', label: '最近更新', path: 'recent' },
   { id: 'about', label: '关于镜像', path: 'about' },
 ]

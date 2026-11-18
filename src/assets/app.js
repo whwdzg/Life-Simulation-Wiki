@@ -686,6 +686,25 @@ function setupMaps() {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Discussion board filters
+   -------------------------------------------------------------------------- */
+
+function setupDiscussions() {
+  const filters = qsa('[data-discussion-filter]')
+  if (!filters.length) return
+  const threads = qsa('[data-discussion-thread]')
+  for (const filter of filters) {
+    filter.addEventListener('click', () => {
+      const value = filter.dataset.discussionFilter
+      for (const item of filters) item.classList.toggle('is-active', item === filter)
+      for (const thread of threads) {
+        thread.classList.toggle('is-hidden', value !== 'all' && thread.dataset.forum !== value)
+      }
+    })
+  }
+}
+
 const start = () => {
   setupTheme()
   setupInlineSurfaces()
@@ -701,6 +720,7 @@ const start = () => {
   setupBackToTop()
   setupMisc()
   setupMaps()
+  setupDiscussions()
   setupLegacyServiceWorker()
 }
 

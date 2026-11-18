@@ -102,7 +102,7 @@ async function main() {
   const search = JSON.parse(await readFile(join(root, 'data', 'search.json'), 'utf8').catch(() => '{"entries":[]}'))
   if (!Array.isArray(search.entries) || search.entries.length === 0) problems.push('搜索索引为空')
 
-  const missingIndexes = ['pages', 'templates', 'media', 'categories', 'maps', 'recent', 'statistics', 'about', 'search']
+  const missingIndexes = ['pages', 'templates', 'media', 'categories', 'maps', 'discussions', 'recent', 'statistics', 'about', 'search']
   for (const path of missingIndexes) {
     if (!(await exists(join(root, path)))) problems.push(`缺少索引页 ${path}/`)
   }

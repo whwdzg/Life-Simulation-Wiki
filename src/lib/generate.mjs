@@ -974,13 +974,13 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     categories: ['reference', 'games', 'entertainment'],
     prefer_related_applications: false,
     icons: [
-      { src: `${config.base}/assets/icons/icon-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: `${config.base}/assets/icons/icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: `${config.base}/assets/icons/icon-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      { src: `${config.base}/assets/icons/icon-192.png?v=2`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: `${config.base}/assets/icons/icon-512.png?v=2`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: `${config.base}/assets/icons/icon-maskable-512.png?v=2`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
     shortcuts: [
-      { name: '全部页面', short_name: '页面', url: `${config.base}/pages/`, icons: [{ src: `${config.base}/assets/icons/icon-192.png`, sizes: '192x192' }] },
-      { name: '站内搜索', short_name: '搜索', url: `${config.base}/search/`, icons: [{ src: `${config.base}/assets/icons/icon-192.png`, sizes: '192x192' }] },
+      { name: '全部页面', short_name: '页面', url: `${config.base}/pages/`, icons: [{ src: `${config.base}/assets/icons/icon-192.png?v=2`, sizes: '192x192' }] },
+      { name: '站内搜索', short_name: '搜索', url: `${config.base}/search/`, icons: [{ src: `${config.base}/assets/icons/icon-192.png?v=2`, sizes: '192x192' }] },
     ],
   }
   await writeFile(join(config.outDir, 'manifest.webmanifest'), `${JSON.stringify(manifest, null, 2)}\n`)

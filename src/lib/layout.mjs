@@ -281,7 +281,7 @@ export function renderDocument({
   <meta property="og:image" content="${escapeHtml(logo)}">
   <link rel="manifest" href="${config.base}/manifest.webmanifest">
   <link rel="icon" href="${site.favicon || `${config.base}/assets/favicon.svg`}">
-  <link rel="apple-touch-icon" href="${config.base}/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="${config.base}/assets/icons/icon-192.png?v=2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="来福 Wiki">

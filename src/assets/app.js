@@ -459,6 +459,106 @@ function setupTables() {
   }
 }
 
+function setupStickyTableHeaders() {
+  const tables = qsa('.wiki-content .table-scroll > table')
+  if (!tables.length) return
+  const siteHeader = qs('.site-header')
+
+  for (const table of tables) {
+    const wrapper = table.parentElement
+    if (!wrapper) continue
+    const headerRow = table.tHead?.rows[0] ?? [...table.rows].find((row) => row.cells.length && [...row.cells].some((cell) => cell.tagName === 'TH'))
+    if (!headerRow) continue
+
+    const overlay = document.createElement('div')
+    overlay.className = 'table-sticky-head'
+    overlay.hidden = true
+    overlay.setAttribute('aria-hidden', 'true')
+    overlay.inert = true
+    const clone = document.createElement('table')
+    clone.className = table.className
+    clone.style.tableLayout = 'fixed'
+    clone.style.borderCollapse = 'collapse'
+    let queued = false
+
+    const headerBlock = table.tHead ?? headerRow
+    const head = table.tHead ? table.tHead.cloneNode(true) : document.createElement('thead')
+    if (!table.tHead) head.appendChild(headerRow.cloneNode(true))
+    head.querySelectorAll('[id]').forEach((element) => element.removeAttribute('id'))
+    head.querySelectorAll('a, button, input, select, textarea').forEach((element) => {
+      element.setAttribute('tabindex', '-1')
+      if (element.tagName === 'A') element.removeAttribute('href')
+    })
+    clone.appendChild(head)
+    overlay.appendChild(clone)
+    document.body.appendChild(overlay)
+
+    const cells = [...head.rows[0].cells]
+    const sourceCells = [...headerRow.cells]
+
+    const measure = () => {
+      const tableRect = table.getBoundingClientRect()
+      clone.style.width = `${tableRect.width}px`
+      for (let index = 0; index < cells.length; index += 1) {
+        const width = sourceCells[index]?.getBoundingClientRect().width
+        if (width) {
+          cells[index].style.width = `${width}px`
+          cells[index].style.minWidth = `${width}px`
+        }
+      }
+    }
+
+    const position = () => {
+      const tableRect = table.getBoundingClientRect()
+      const wrapperRect = wrapper.getBoundingClientRect()
+      const headerRect = headerBlock.getBoundingClientRect()
+      const headerBottom = siteHeader ? Math.max(0, siteHeader.getBoundingClientRect().bottom) : 0
+      const stickyTop = headerBottom + 6
+      const visible =
+        tableRect.height > 0 &&
+        headerRect.height > 0 &&
+        tableRect.top < stickyTop &&
+        tableRect.bottom > stickyTop + headerRect.height + 12
+      if (!visible) {
+        overlay.hidden = true
+        return
+      }
+      clone.style.width = `${tableRect.width}px`
+      overlay.hidden = false
+      overlay.style.left = `${wrapperRect.left}px`
+      overlay.style.top = `${stickyTop}px`
+      overlay.style.width = `${wrapperRect.width}px`
+      clone.style.transform = `translateX(${-wrapper.scrollLeft}px)`
+    }
+
+    const update = () => {
+      if (queued) return
+      queued = true
+      window.requestAnimationFrame(() => {
+        queued = false
+        position()
+      })
+    }
+
+    measure()
+    position()
+    window.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', () => {
+      measure()
+      update()
+    })
+    wrapper.addEventListener('scroll', update, { passive: true })
+    if ('ResizeObserver' in window) {
+      const observer = new ResizeObserver(() => {
+        measure()
+        update()
+      })
+      observer.observe(table)
+      observer.observe(wrapper)
+    }
+  }
+}
+
 /* --------------------------------------------------------------------------
    Lightbox
    -------------------------------------------------------------------------- */
@@ -1142,6 +1242,7 @@ const start = () => {
   setupTabbers()
   setupCollapsibles()
   setupTables()
+  setupStickyTableHeaders()
   setupFilters()
   setupLightbox()
   setupTocSpy()

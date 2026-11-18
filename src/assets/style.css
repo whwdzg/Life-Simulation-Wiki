@@ -1069,6 +1069,55 @@ html[data-theme="dark"] .wiki-content .mw-highlight .s2 {
   margin: 0;
 }
 
+.table-sticky-head {
+  position: fixed;
+  z-index: 45;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 7px 22px rgb(0 0 0 / 18%);
+  pointer-events: none;
+}
+
+.table-sticky-head[hidden] {
+  display: none;
+}
+
+.table-sticky-head > table {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table-sticky-head th {
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  vertical-align: top;
+  font-weight: 650;
+}
+
+.table-sticky-head table.fandom-table th {
+  border-left: 0;
+  border-right: 0;
+}
+
+.table-sticky-head table.fandom-table tr:first-child th {
+  border-top: 0;
+}
+
+@media print {
+  .table-sticky-head {
+    display: none !important;
+  }
+}
+
 /* --------------------------------------------------------------------------
    Images, thumbnails, galleries
    -------------------------------------------------------------------------- */

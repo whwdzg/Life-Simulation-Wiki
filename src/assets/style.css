@@ -1439,6 +1439,18 @@ html[data-theme="dark"] .freeze-ice {
   break-inside: avoid;
 }
 
+.category-members {
+  columns: 2 260px;
+  column-gap: 26px;
+  padding-left: 1.5em;
+  margin: 0.6em 0 1.4em;
+}
+
+.category-members li {
+  break-inside: avoid;
+  margin: 0 0 3px;
+}
+
 .redirect-box {
   margin: 20px 0;
   padding: 20px 22px;

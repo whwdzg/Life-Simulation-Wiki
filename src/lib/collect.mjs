@@ -139,8 +139,13 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
 
   const categoryPages = pageEntries.filter((page) => page.ns === 14)
   let categoryInfo = new Map()
+  let categoryMembers = new Map()
   if (categoryPages.length) {
     categoryInfo = await api.categoryInfo(categoryPages.map((page) => page.title))
+    logger.info(`读取 ${categoryPages.length} 个分类的成员列表…`)
+    categoryMembers = await api.categoryMembers(categoryPages.map((page) => page.title))
+    const total = [...categoryMembers.values()].reduce((sum, items) => sum + items.length, 0)
+    logger.info(`  分类成员共 ${total} 项`)
   }
 
   logger.info('读取站点自定义 CSS…')
@@ -168,6 +173,7 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
     images,
     fileUsage,
     categoryInfo,
+    categoryMembers,
     customStyles,
     parseFailures: failures,
     requestCount: api.requestCount,

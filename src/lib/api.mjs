@@ -251,6 +251,29 @@ export class WikiApi {
     return info
   }
 
+  async categoryMembers(titles) {
+    const members = new Map()
+    for (const title of titles) {
+      const items = []
+      let continuation = {}
+      do {
+        const data = await this.request({
+          action: 'query',
+          list: 'categorymembers',
+          cmtitle: title,
+          cmprop: 'ids|title|type|timestamp',
+          cmtype: 'page|subcat|file',
+          cmlimit: 'max',
+          ...continuation,
+        })
+        items.push(...(data.query?.categorymembers ?? []))
+        continuation = data.continue ?? null
+      } while (continuation)
+      members.set(title, items)
+    }
+    return members
+  }
+
   async recentChanges(limit = 50) {
     const data = await this.request({
       action: 'query',

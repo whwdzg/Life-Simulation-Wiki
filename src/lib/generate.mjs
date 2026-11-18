@@ -103,7 +103,7 @@ function safeJson(value) {
 }
 
 export async function generateSite({ config, data, buildStartedAt, logger = console }) {
-  const { siteinfo, pages, images, fileUsage, categoryInfo, statistics, mainPage, projectName } = data
+  const { siteinfo, pages, images, fileUsage, categoryInfo, categoryMembers, statistics, mainPage, projectName } = data
   const customStyles = data.customStyles ?? []
   const customCssSource = customStyles
     .map((style) => `/* ${style.title} */\n${style.content}`)
@@ -386,6 +386,42 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     }
   }
 
+  function renderCategory(record) {
+    const members = categoryMembers.get(record.title) ?? []
+    const groups = [
+      { type: 'page', label: '页面', anchor: 'category-pages' },
+      { type: 'subcat', label: '子分类', anchor: 'category-subcats' },
+      { type: 'file', label: '文件', anchor: 'category-files' },
+    ]
+    let html = record.html ? rewriter.rewrite(record.html).html : ''
+    const sections = []
+    for (const group of groups) {
+      const items = members
+        .filter((member) => member.type === group.type)
+        .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+      if (!items.length) continue
+      sections.push({ anchor: group.anchor, line: `${group.label}（${items.length}）`, level: 2 })
+      const links = items
+        .map((member) => {
+          const target = resolver.lookup(member.title)
+          const href = target ? pageUrl(target, config.base) : sourceTitleUrl(member.title)
+          return `<li><a href="${escapeHtml(href)}"${target ? '' : ' target="_blank" rel="noopener noreferrer"'}>${escapeHtml(member.title)}</a></li>`
+        })
+        .join('')
+      html += `<h2 id="${group.anchor}">${group.label}（${items.length}）</h2><ul class="category-members">${links}</ul>`
+    }
+    if (!sections.length && !stripTags(html).trim()) {
+      html = '<p class="notice">此分类目前没有成员。</p>'
+    }
+    record.sections = sections
+    return {
+      html,
+      headExtra: '',
+      summary: `分类，共 ${members.length} 个成员`,
+      plainText: stripTags(html),
+    }
+  }
+
   let remoteMediaCount = 0
   for (const record of records) {
     let result
@@ -393,6 +429,8 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
       result = renderRedirect(record)
     } else if (record.kind === 'file') {
       result = renderFile(record)
+    } else if (record.kind === 'category') {
+      result = renderCategory(record)
     } else if (record.html) {
       const rewritten = rewriter.rewrite(record.html)
       remoteMediaCount += rewritten.remoteFallbacks
@@ -642,15 +680,16 @@ ${mediaRecords
   const categoryRecords = records
     .filter((record) => record.ns === 14)
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
-  const categoriesContent = `<p class="index-intro">共 ${formatNumber(categoryRecords.length)} 个分类。分类页面中的成员列表由 MediaWiki 在抓取时生成。</p>
+  const categoriesContent = `<p class="index-intro">共 ${formatNumber(categoryRecords.length)} 个分类。成员列表在构建时通过 <code>list=categorymembers</code> 抓取并生成为本地链接。</p>
 <div class="card-grid">
 ${categoryRecords
   .map((record) => {
     const info = categoryInfo.get(record.title)
-    const size = info?.size ?? info?.pages ?? 0
+    const memberCount = (categoryMembers.get(record.title) ?? []).length
+    const size = memberCount || info?.size || info?.pages || 0
     return `<a class="card" href="${pageUrl(record, config.base)}">
   <strong>${escapeHtml(record.title)}</strong>
-  <span>${formatNumber(record.sections.length)} 个章节${size ? ` · ${formatNumber(size)} 个成员` : ''}</span>
+  <span>${formatNumber(size)} 个成员</span>
 </a>`
   })
   .join('')}

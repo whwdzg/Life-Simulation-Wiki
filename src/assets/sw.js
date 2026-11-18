@@ -1,6 +1,7 @@
 /* 来福Simulation Wiki PWA service worker.
-   Pages are network-first so the mirror stays fresh; static assets use
-   stale-while-revalidate. Previously visited pages remain available offline. */
+   Pages use cache-first with a background refresh so repeat visits render
+   instantly; static assets use stale-while-revalidate. Previously visited
+   pages remain available offline. */
 const CACHE = 'lifesim-wiki-pwa-v1'
 const CACHE_PREFIX = 'lifesim-wiki-pwa-'
 const scope = self.registration.scope
@@ -71,19 +72,20 @@ const offlineResponse = () =>
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   })
 
-const networkFirst = async (request) => {
+const navigationFirst = async (request, event) => {
   const cache = await caches.open(CACHE)
-  try {
-    const response = await fetch(request)
-    if (response && response.ok) await cache.put(request, response.clone())
-    return response
-  } catch {
-    return (
-      (await cache.match(request)) ||
-      (await cache.match(new URL('', scope).href)) ||
-      offlineResponse()
-    )
+  const cached = await cache.match(request)
+  const network = fetch(request)
+    .then(async (response) => {
+      if (response && response.ok) await cache.put(request, response.clone())
+      return response
+    })
+    .catch(() => null)
+  if (cached) {
+    event.waitUntil(network)
+    return cached
   }
+  return (await network) || (await cache.match(new URL('', scope).href)) || offlineResponse()
 }
 
 const staleWhileRevalidate = async (request) => {
@@ -110,7 +112,7 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.endsWith('/sw.js')) return
 
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirst(request))
+    event.respondWith(navigationFirst(request, event))
     return
   }
 

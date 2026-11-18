@@ -90,6 +90,18 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
   }
   logger.info(`发现 ${redirectCount} 个重定向页面`)
 
+  let mapCount = 0
+  for (const page of pageEntries) {
+    if (page.ns !== 2900 || page.isRedirect || !page.wikitext.trim()) continue
+    try {
+      page.map = JSON.parse(page.wikitext)
+      mapCount += 1
+    } catch (error) {
+      page.mapError = error.message
+    }
+  }
+  if (mapCount) logger.info(`解析 ${mapCount} 个互动地图`)
+
   const parseTargets = pageEntries.filter((page) => {
     if (page.missing || page.isRedirect) return false
     if (page.ns === 6 && !page.wikitext.trim()) return false

@@ -546,6 +546,146 @@ function setupLegacyServiceWorker() {
     .catch(() => {})
 }
 
+/* --------------------------------------------------------------------------
+   Interactive maps
+   -------------------------------------------------------------------------- */
+
+function setupMaps() {
+  for (const root of qsa('[data-map]')) {
+    const viewport = qs('[data-map-viewport]', root)
+    const canvas = qs('[data-map-canvas]', root)
+    if (!viewport || !canvas) continue
+    const markers = qsa('[data-map-marker]', root)
+    const filters = qsa('[data-map-filter]', root)
+    const info = qs('[data-map-info]', root)
+    const zoomLabel = qs('[data-map-zoom-label]', root)
+    let scale = 1
+    let offsetX = 0
+    let offsetY = 0
+    let pointerId = null
+    let startX = 0
+    let startY = 0
+    let startOffsetX = 0
+    let startOffsetY = 0
+
+    const clamp = () => {
+      const minX = viewport.clientWidth * (1 - scale)
+      const minY = viewport.clientHeight * (1 - scale)
+      offsetX = Math.min(0, Math.max(minX, offsetX))
+      offsetY = Math.min(0, Math.max(minY, offsetY))
+    }
+
+    const apply = () => {
+      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
+      if (zoomLabel) zoomLabel.textContent = `${Math.round(scale * 100)}%`
+    }
+
+    const setScale = (value, centerX, centerY) => {
+      const next = Math.min(6, Math.max(1, value))
+      if (next === scale) return
+      const px = centerX ?? viewport.clientWidth / 2
+      const py = centerY ?? viewport.clientHeight / 2
+      offsetX = px - (px - offsetX) * (next / scale)
+      offsetY = py - (py - offsetY) * (next / scale)
+      scale = next
+      clamp()
+      apply()
+    }
+
+    const reset = () => {
+      scale = 1
+      offsetX = 0
+      offsetY = 0
+      apply()
+    }
+
+    const selectMarker = (index, focus = false) => {
+      const marker = markers.find((item) => item.dataset.index === String(index))
+      if (!marker) return
+      for (const item of markers) item.classList.toggle('is-active', item === marker)
+      if (!info) return
+      info.replaceChildren()
+      const heading = document.createElement('h3')
+      heading.textContent = marker.dataset.title || '标记'
+      info.appendChild(heading)
+      if (marker.dataset.description) {
+        const description = document.createElement('p')
+        description.textContent = marker.dataset.description
+        info.appendChild(description)
+      }
+      if (marker.dataset.link) {
+        const link = document.createElement('a')
+        link.href = marker.dataset.link
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        link.textContent = marker.dataset.linkLabel || '查看相关页面'
+        info.appendChild(link)
+      }
+      if (focus) viewport.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
+    viewport.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault()
+        const rect = viewport.getBoundingClientRect()
+        setScale(scale * (event.deltaY < 0 ? 1.2 : 1 / 1.2), event.clientX - rect.left, event.clientY - rect.top)
+      },
+      { passive: false },
+    )
+
+    viewport.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || scale <= 1) return
+      pointerId = event.pointerId
+      startX = event.clientX
+      startY = event.clientY
+      startOffsetX = offsetX
+      startOffsetY = offsetY
+      viewport.setPointerCapture(pointerId)
+      viewport.classList.add('is-dragging')
+    })
+
+    viewport.addEventListener('pointermove', (event) => {
+      if (pointerId !== event.pointerId) return
+      offsetX = startOffsetX + (event.clientX - startX)
+      offsetY = startOffsetY + (event.clientY - startY)
+      clamp()
+      apply()
+    })
+
+    const endDrag = (event) => {
+      if (pointerId !== event.pointerId) return
+      pointerId = null
+      viewport.classList.remove('is-dragging')
+    }
+    viewport.addEventListener('pointerup', endDrag)
+    viewport.addEventListener('pointercancel', endDrag)
+
+    qs('[data-map-zoom-in]', root)?.addEventListener('click', () => setScale(scale * 1.4))
+    qs('[data-map-zoom-out]', root)?.addEventListener('click', () => setScale(scale / 1.4))
+    qs('[data-map-reset]', root)?.addEventListener('click', reset)
+
+    for (const filter of filters) {
+      filter.addEventListener('click', () => {
+        const value = filter.dataset.mapFilter
+        for (const item of filters) item.classList.toggle('is-active', item === filter)
+        for (const marker of markers) {
+          marker.classList.toggle('is-hidden', value !== 'all' && marker.dataset.category !== value)
+        }
+      })
+    }
+
+    for (const marker of markers) {
+      marker.addEventListener('click', () => selectMarker(marker.dataset.index))
+    }
+    for (const item of qsa('[data-marker-target]', root)) {
+      item.addEventListener('click', () => selectMarker(item.dataset.markerTarget, true))
+    }
+
+    apply()
+  }
+}
+
 const start = () => {
   setupTheme()
   setupInlineSurfaces()
@@ -560,6 +700,7 @@ const start = () => {
   setupTocSpy()
   setupBackToTop()
   setupMisc()
+  setupMaps()
   setupLegacyServiceWorker()
 }
 

@@ -52,6 +52,7 @@ const ACTIVE_BY_KIND = {
   module: 'templates',
   file: 'media',
   category: 'categories',
+  map: 'maps',
 }
 
 const MEDIA_ICON = {
@@ -204,6 +205,34 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     return null
   }
 
+  function mapBoundsFor(map) {
+    const bounds = map?.mapBounds
+    if (!Array.isArray(bounds) || bounds.length < 2) return null
+    const [[minX, minY], [maxX, maxY]] = bounds
+    const width = Number(maxX) - Number(minX)
+    const height = Number(maxY) - Number(minY)
+    if (!(width > 0) || !(height > 0)) return null
+    return { minX: Number(minX), minY: Number(minY), maxX: Number(maxX), maxY: Number(maxY), width, height }
+  }
+
+  function mapImageFor(map) {
+    const directName = String(map?.mapImage ?? '').replace(/^File:/i, '')
+    const direct = directName ? imageByName.get(directName) : null
+    if (direct) return direct
+    // Some maps reference an image that has since been renamed. Fall back to
+    // the uploaded image that exactly matches the map's coordinate bounds.
+    const bounds = mapBoundsFor(map)
+    if (!bounds) return null
+    const candidates = images.filter(
+      (image) => Number(image.width) === bounds.width && Number(image.height) === bounds.height,
+    )
+    return (
+      candidates.find((image) => /地图|map|含地狱|世界|world/i.test(image.name)) ??
+      candidates[0] ??
+      null
+    )
+  }
+
   function resolveRedirect(record) {
     let title = record.redirectTarget
     let anchor = record.redirectAnchor ?? ''
@@ -257,6 +286,11 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     const small = thumbUrlFor(image, 240)
     if (large) addAsset(large)
     if (small) addAsset(small)
+  }
+  for (const record of records.filter((item) => item.kind === 'map')) {
+    const image = mapImageFor(record.map)
+    const thumb = image ? thumbUrlFor(image, 480) : null
+    if (thumb) addAsset(thumb)
   }
   for (const style of customStyles) {
     for (const match of style.content.matchAll(/url\(\s*(["']?)(.*?)\1\s*\)/gi)) {
@@ -460,6 +494,112 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     }
   }
 
+  function renderMap(record) {
+    const map = record.map
+    const fallbackNotice = '<div class="notice">此互动地图的源站数据无法解析或为空，仅显示原始数据链接。</div>'
+    if (!map) {
+      return {
+        html: `${fallbackNotice}<p><a href="${escapeHtml(record.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看原地图页面</a></p>`,
+        headExtra: '',
+        summary: '互动地图（数据缺失）',
+        plainText: '互动地图数据缺失',
+      }
+    }
+    const bounds = mapBoundsFor(map) ?? { minX: 0, minY: 0, maxX: 1, maxY: 1, width: 1, height: 1 }
+    const image = mapImageFor(map)
+    const imageUrl = image ? media.urlFor(image.url) : null
+    const originTop = String(map.origin ?? '').toLowerCase().includes('top')
+    const categories = Array.isArray(map.categories) ? map.categories : []
+    const categoryById = new Map(categories.map((category) => [String(category.id), category]))
+    const markers = Array.isArray(map.markers) ? map.markers : []
+    const markerCounts = new Map()
+    let markerHtml = ''
+    const listItems = []
+
+    markers.forEach((marker, index) => {
+      const categoryId = String(marker.categoryId ?? '')
+      markerCounts.set(categoryId, (markerCounts.get(categoryId) ?? 0) + 1)
+      const category = categoryById.get(categoryId)
+      const color = /^#[0-9a-f]{3,8}$/i.test(String(category?.color ?? '')) ? category.color : 'var(--accent)'
+      const position = Array.isArray(marker.position) ? marker.position : [0, 0]
+      const rawX = Number(position[0])
+      const rawY = Number(position[1])
+      const left = Math.min(100, Math.max(0, ((rawX - bounds.minX) / bounds.width) * 100))
+      const top = Math.min(
+        100,
+        Math.max(0, ((originTop ? rawY - bounds.minY : bounds.maxY - rawY) / bounds.height) * 100),
+      )
+      const title = String(marker.popup?.title ?? `标记 ${index + 1}`)
+      const description = String(marker.popup?.description ?? '')
+      const rawLink = String(marker.popup?.link?.url ?? '')
+      let link = ''
+      if (rawLink) {
+        const resolved = resolver.resolve(rawLink)
+        if (resolved.type === 'internal' || resolved.type === 'external' || resolved.type === 'missing') link = resolved.url
+      }
+      const linkLabel = String(marker.popup?.link?.label ?? '查看相关页面')
+      const iconName = String(marker.icon ?? '').replace(/^File:/i, '')
+      const iconImage = iconName ? imageByName.get(iconName) : null
+      const iconUrl = iconImage ? media.urlFor(iconImage.url) : null
+      const visual = iconUrl
+        ? `<img class="map-marker__icon" src="${escapeHtml(iconUrl)}" alt="" loading="lazy" decoding="async">`
+        : '<span class="map-marker__dot"></span>'
+      markerHtml += `<button class="map-marker" type="button" data-map-marker data-index="${index}" data-category="${escapeHtml(categoryId)}" data-title="${escapeHtml(title)}" data-description="${escapeHtml(description)}" data-link="${escapeHtml(link)}" data-link-label="${escapeHtml(linkLabel)}" style="left:${left.toFixed(4)}%;top:${top.toFixed(4)}%;--marker-color:${escapeHtml(color)}" aria-label="${escapeHtml(title)}">${visual}</button>`
+      listItems.push(
+        `<button class="map-list-item" type="button" data-marker-target="${index}"><span class="map-list-item__dot" style="--marker-color:${escapeHtml(color)}"></span><span class="map-list-item__text"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(category?.name ?? '未分类')}${description ? ` · ${escapeHtml(description)}` : ''}</small></span></button>`,
+      )
+    })
+
+    const legend = [
+      `<button class="map-filter is-active" type="button" data-map-filter="all">全部 <span>${markers.length}</span></button>`,
+      ...categories.map((category) => {
+        const id = String(category.id)
+        const color = /^#[0-9a-f]{3,8}$/i.test(String(category.color ?? '')) ? category.color : 'var(--accent)'
+        return `<button class="map-filter" type="button" data-map-filter="${escapeHtml(id)}" style="--marker-color:${escapeHtml(color)}"><span class="map-list-item__dot" style="--marker-color:${escapeHtml(color)}"></span>${escapeHtml(category.name)} <span>${markerCounts.get(id) ?? 0}</span></button>`
+      }),
+    ].join('')
+    const description = String(map.description ?? '').trim()
+    const title = String(map.title ?? record.title.replace(/^地图:/, ''))
+    record.sections = [
+      { anchor: 'map', line: '地图', level: 2 },
+      { anchor: 'map-markers', line: '标记列表', level: 2 },
+    ]
+    const html = `<section class="interactive-map" data-map>
+  <div class="map-intro">
+    <h2 id="map">地图</h2>
+    ${description ? `<p class="map-description">${escapeHtml(description)}</p>` : ''}
+    <p class="map-meta">${escapeHtml(title)} · ${formatNumber(markers.length)} 个标记 · ${formatNumber(categories.length)} 个分类${image ? '' : ' · 源站地图图片缺失'}</p>
+  </div>
+  ${imageUrl ? '' : '<div class="notice">源站配置的地图图片不存在，已保留标记坐标；可在原站查看完整地图。</div>'}
+  <div class="map-legend" role="group" aria-label="按分类筛选地图标记">${legend}</div>
+  <div class="map-viewport" data-map-viewport style="aspect-ratio:${bounds.width} / ${bounds.height}">
+    <div class="map-canvas" data-map-canvas>
+      ${imageUrl ? `<img class="map-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" draggable="false" loading="lazy" decoding="async">` : '<div class="map-image map-image--missing"></div>'}
+      ${markerHtml}
+    </div>
+  </div>
+  <div class="map-tools">
+    <button type="button" class="icon-button" data-map-zoom-in aria-label="放大地图">＋</button>
+    <button type="button" class="icon-button" data-map-zoom-out aria-label="缩小地图">－</button>
+    <button type="button" class="map-reset" data-map-reset>重置</button>
+    <span class="map-zoom" data-map-zoom-label>100%</span>
+    <span class="map-hint">滚轮缩放 · 拖动平移</span>
+  </div>
+  <aside class="map-info" data-map-info>点击地图标记或下方列表查看详情。</aside>
+  <div class="map-marker-list-block">
+    <h2 id="map-markers">标记列表</h2>
+    ${listItems.length ? `<div class="map-marker-list">${listItems.join('')}</div>` : '<p class="comments-empty">此地图没有标记。</p>'}
+  </div>
+</section>`
+    return {
+      html,
+      headExtra: '',
+      summary: `互动地图，${markers.length} 个标记，${categories.length} 个分类`,
+      plainText: `${description} ${markers.map((marker) => marker.popup?.title ?? '').join(' ')}`,
+    }
+  }
+
+
   function renderCommentItem(comment, depth = 0) {
     const author = commentAuthor(comment)
     const authorRecord = resolver.lookup(`User:${author}`)
@@ -517,6 +657,8 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
       result = renderFile(record)
     } else if (record.kind === 'category') {
       result = renderCategory(record)
+    } else if (record.kind === 'map') {
+      result = renderMap(record)
     } else if (record.html) {
       const rewritten = rewriter.rewrite(record.html)
       remoteMediaCount += rewritten.remoteFallbacks
@@ -794,6 +936,33 @@ ${categoryRecords
     content: categoriesContent,
   })
 
+  const mapRecords = records
+    .filter((record) => record.kind === 'map')
+    .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+  const mapsContent = `<p class="index-intro">共 ${formatNumber(mapRecords.length)} 张互动地图。地图图片与标记坐标均已静态化，可缩放、拖动并按分类筛选。</p>
+<div class="map-card-grid">
+${mapRecords
+  .map((record) => {
+    const map = record.map ?? {}
+    const image = mapImageFor(map)
+    const thumb = image ? media.urlFor(thumbUrlFor(image, 480)) ?? media.urlFor(image.url) : null
+    const count = Array.isArray(map.markers) ? map.markers.length : 0
+    return `<a class="map-card" href="${pageUrl(record, config.base)}">
+  <span class="map-card__preview">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy" decoding="async">` : '<span class="map-card__placeholder">地图</span>'}</span>
+  <span class="map-card__body"><strong>${escapeHtml(record.title)}</strong><span>${formatNumber(count)} 个标记${map.description ? ` · ${escapeHtml(String(map.description).slice(0, 70))}` : ''}</span></span>
+</a>`
+  })
+  .join('') || '<p class="comments-empty">镜像中暂时没有互动地图。</p>'}
+</div>`
+  await writeIndexPage({
+    path: 'maps',
+    heading: '地图',
+    title: '地图',
+    description: '浏览镜像收录的互动地图。',
+    active: 'maps',
+    content: mapsContent,
+  })
+
   const recentRecords = records
     .filter((record) => record.timestamp)
     .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
@@ -1008,7 +1177,7 @@ ${failureDetails}
       loc: `${config.origin}${config.base}/${encodeUrlPath(record.urlPath)}/`,
       lastmod: record.timestamp ? record.timestamp.slice(0, 10) : build.finishedAt.slice(0, 10),
     })),
-    ...['pages', 'templates', 'media', 'categories', 'recent', 'statistics', 'search', 'about'].map((path) => ({
+    ...['pages', 'templates', 'media', 'categories', 'maps', 'recent', 'statistics', 'search', 'about'].map((path) => ({
       loc: `${config.origin}${config.base}/${path}/`,
       lastmod: build.finishedAt.slice(0, 10),
     })),

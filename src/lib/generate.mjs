@@ -79,6 +79,39 @@ function mediaKind(mime) {
   return 'file'
 }
 
+function commentText(comment) {
+  return String(comment?.text ?? comment?.content ?? comment?.comment ?? '')
+}
+
+function commentAuthor(comment) {
+  return String(
+    comment?.userName ?? comment?.username ?? comment?.author?.name ?? comment?.createdBy?.name ?? '匿名用户',
+  )
+}
+
+function commentAvatar(comment) {
+  return comment?.userAvatar ?? comment?.avatar ?? comment?.author?.avatar ?? comment?.createdBy?.avatarUrl ?? ''
+}
+
+function commentTimestamp(comment) {
+  const value = comment?.timestamp ?? comment?.createdAt ?? comment?.creationDate ?? comment?.createdAtUtc
+  if (typeof value === 'number') return new Date(value < 1e12 ? value * 1000 : value).toISOString()
+  return value ?? ''
+}
+
+function commentReplies(comment) {
+  return Array.isArray(comment?.replies) ? comment.replies : []
+}
+
+function walkComments(comments) {
+  const out = []
+  for (const comment of comments ?? []) {
+    out.push(comment)
+    out.push(...walkComments(commentReplies(comment)))
+  }
+  return out
+}
+
 function thumbUrlFor(image, width) {
   if (!image?.url) return null
   if (String(image.mime ?? '') === 'image/svg+xml') return image.url
@@ -211,6 +244,11 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
   for (const record of records) {
     if (record.html) {
       for (const url of collectAssets(record.html)) assetSet.add(url)
+    }
+    for (const comment of walkComments(record.comments)) {
+      for (const url of collectAssets(commentText(comment))) assetSet.add(url)
+      const avatar = commentAvatar(comment)
+      if (isMirrorableMediaUrl(avatar)) addAsset(avatar)
     }
   }
   for (const image of images) {
@@ -422,6 +460,54 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     }
   }
 
+  function renderCommentItem(comment, depth = 0) {
+    const author = commentAuthor(comment)
+    const authorRecord = resolver.lookup(`User:${author}`)
+    const authorName = authorRecord
+      ? `<a href="${pageUrl(authorRecord, config.base)}">${escapeHtml(author)}</a>`
+      : escapeHtml(author)
+    const normalizedAvatar = normalizeMediaUrl(commentAvatar(comment))
+    const avatar = normalizedAvatar ? media.urlFor(normalizedAvatar) : null
+    const avatarHtml = avatar
+      ? `<img class="comment-avatar" src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async">`
+      : `<span class="comment-avatar comment-avatar--fallback" aria-hidden="true">${escapeHtml(author.slice(0, 1))}</span>`
+    const raw = commentText(comment)
+    const body = raw.includes('<')
+      ? rewriter.rewrite(raw).html
+      : `<p>${escapeHtml(raw).replace(/\n/g, '<br>')}</p>`
+    const timestamp = commentTimestamp(comment)
+    const likes = comment?.likes ?? comment?.likeCount ?? comment?.upvotes
+    const replies = commentReplies(comment)
+    const replyHtml = replies.length
+      ? `<ul class="comment-replies">${replies.map((reply) => renderCommentItem(reply, depth + 1)).join('')}</ul>`
+      : ''
+    return `<li class="comment${depth ? ' comment--reply' : ''}"${comment?.id ? ` id="comment-${escapeHtml(comment.id)}"` : ''}>
+  <div class="comment-head">${avatarHtml}<span class="comment-author">${authorName}</span>${timestamp ? `<time datetime="${escapeHtml(timestamp)}">${formatDateTime(timestamp)}</time>` : ''}${likes ? `<span class="comment-likes">♥ ${formatNumber(likes)}</span>` : ''}</div>
+  <div class="comment-body">${body}</div>
+  ${replyHtml}
+</li>`
+  }
+
+  function renderComments(record) {
+    const comments = record.comments ?? []
+    const total = record.commentsTotal ?? comments.length
+    const source = record.sourceUrl
+    if (!comments.length) {
+      const note = record.commentsSupported
+        ? '源站页面暂无评论。'
+        : '源站未返回评论，评论功能可能未启用或暂无评论。'
+      return `<section class="comments-section comments-section--empty" id="comments">
+  <div class="comments-head"><h2>页面评论</h2><span class="comments-count">0</span></div>
+  <p class="comments-empty">${note} <a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">在原站查看或参与评论</a></p>
+</section>`
+    }
+    return `<section class="comments-section" id="comments">
+  <div class="comments-head"><h2>页面评论</h2><span class="comments-count">${formatNumber(total)}</span></div>
+  <ol class="comment-list">${comments.map((comment) => renderCommentItem(comment)).join('')}</ol>
+  <p class="comments-note">评论同步自原站，按源站顺序展示。<a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">在原站参与讨论</a></p>
+</section>`
+  }
+
   let remoteMediaCount = 0
   for (const record of records) {
     let result
@@ -469,6 +555,11 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     record.headExtra = result.headExtra
     record.summary = result.summary || `${record.nsName}页面`
     record.plainText = result.plainText || ''
+    if (record.ns === 0 && !record.isRedirect) {
+      const commentsHtml = renderComments(record)
+      record.contentHtml += commentsHtml
+      record.plainText += ` ${stripTags(commentsHtml)}`
+    }
   }
   build.remoteMedia = remoteMediaCount
 

@@ -148,6 +148,24 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
     logger.info(`  分类成员共 ${total} 项`)
   }
 
+  logger.info('读取页面评论…')
+  const commentTargets = pageEntries.filter((page) => page.ns === 0 && !page.isRedirect && page.pageid)
+  let commentsTotal = 0
+  await mapConcurrent(commentTargets, 6, async (page) => {
+    try {
+      const result = await api.articleComments(page.pageid)
+      page.comments = result.comments ?? []
+      page.commentsSupported = result.supported
+      page.commentsTotal = result.total ?? page.comments.length
+      commentsTotal += page.commentsTotal
+    } catch (error) {
+      page.comments = []
+      page.commentsSupported = false
+      page.commentsError = error.message
+    }
+  })
+  logger.info(`  评论接口返回 ${commentsTotal} 条（源站未启用评论时为 0）`)
+
   logger.info('读取站点自定义 CSS…')
   const customStyles = []
   for (const title of ['MediaWiki:Common.css', 'MediaWiki:Wikia.css', 'MediaWiki:Mobile.css']) {

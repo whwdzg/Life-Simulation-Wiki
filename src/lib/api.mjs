@@ -274,6 +274,48 @@ export class WikiApi {
     return members
   }
 
+  /**
+   * Fandom ArticleComments endpoint. This is not part of api.php:
+   * /wikia.php?controller=ArticleCommentsController&method=getComments
+   * Returns supported=false when the wiki/page has comments disabled (404).
+   */
+  async articleComments(articleId, { page = 1, timeout = 20_000 } = {}) {
+    const url = new URL(this.apiUrl.replace(/\/api\.php$/, '/wikia.php'))
+    url.searchParams.set('controller', 'ArticleCommentsController')
+    url.searchParams.set('method', 'getComments')
+    url.searchParams.set('articleId', String(articleId))
+    url.searchParams.set('page', String(page))
+    url.searchParams.set('format', 'json')
+    let lastError
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await fetch(url, {
+          headers: { 'user-agent': this.userAgent, accept: 'application/json, text/html;q=0.8' },
+          signal: AbortSignal.timeout(timeout),
+        })
+        if (response.status === 404) return { supported: false, comments: [], total: 0 }
+        if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`)
+        const contentType = response.headers.get('content-type') ?? ''
+        if (!contentType.includes('json')) {
+          return { supported: true, comments: [], total: 0, html: (await response.text()).slice(0, 200_000) }
+        }
+        const data = await response.json()
+        if (data?.status === 404) return { supported: false, comments: [], total: 0 }
+        const raw = Array.isArray(data)
+          ? data
+          : data?.comments ?? data?.payload?.comments ?? data?.payload?.commentList ?? []
+        const comments = Array.isArray(raw) ? raw : Object.values(raw ?? {})
+        const total =
+          data?.totalComments ?? data?.payload?.totalComments ?? data?.countComments ?? data?.payload?.countComments ?? comments.length
+        return { supported: true, comments, total: Number(total) || comments.length }
+      } catch (error) {
+        lastError = error
+        if (attempt === 0) await delay(1_000)
+      }
+    }
+    throw lastError instanceof Error ? lastError : new ApiError('Article comments request failed')
+  }
+
   async recentChanges(limit = 50) {
     const data = await this.request({
       action: 'query',

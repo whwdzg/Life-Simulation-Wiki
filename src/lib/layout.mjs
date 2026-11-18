@@ -91,6 +91,21 @@ export function renderSidebar({ base, active, build, site, counts, toc, sidebarE
     <p>内容更新时间：<time datetime="${build.finishedAt}">${formatDateTime(build.finishedAt)}</time></p>
     <p><a href="${site.sourceUrl}" target="_blank" rel="noopener noreferrer">访问原站 ${icon('external', 'icon icon--small')}</a></p>
   </section>
+  <section class="sidebar-block sidebar-pwa" data-pwa-card>
+    <h2>安装为应用</h2>
+    <p class="pwa-lead">把镜像添加到桌面或主屏幕，像 App 一样全屏打开；访问过的页面可离线查看。</p>
+    <button class="pwa-install" type="button" data-pwa-install aria-describedby="pwa-status">安装到设备</button>
+    <p class="pwa-status" id="pwa-status" data-pwa-status role="status" aria-live="polite">正在检查安装条件…</p>
+    <details class="pwa-help" data-pwa-help>
+      <summary>安装方法</summary>
+      <div class="pwa-help__body">
+        <p><strong>Chrome / Edge 桌面</strong>：点击地址栏右侧的安装图标，或打开菜单 → “安装应用”。</p>
+        <p><strong>Android</strong>：浏览器菜单 → “安装应用”或“添加到主屏幕”。</p>
+        <p><strong>iPhone / iPad</strong>：在 Safari 中点分享按钮 → “添加到主屏幕”。</p>
+        <p>安装后从桌面图标启动，不显示浏览器地址栏；访问过的页面与样式会缓存到本地，断网时仍可打开。</p>
+      </div>
+    </details>
+  </section>
 </aside>`
 }
 
@@ -247,6 +262,7 @@ export function renderDocument({
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
   <title>${escapeHtml(fullTitle)}</title>
   <meta name="description" content="${escapeHtml(metaDescription)}">
@@ -256,8 +272,12 @@ export function renderDocument({
   <meta property="og:title" content="${escapeHtml(fullTitle)}">
   <meta property="og:description" content="${escapeHtml(metaDescription)}">
   <meta property="og:image" content="${escapeHtml(logo)}">
+  <link rel="manifest" href="${config.base}/manifest.webmanifest">
   <link rel="icon" href="${site.favicon || `${config.base}/assets/favicon.svg`}">
-  <link rel="apple-touch-icon" href="${logo}">
+  <link rel="apple-touch-icon" href="${config.base}/assets/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="来福 Wiki">
   <link rel="stylesheet" href="${config.base}/assets/style.css?v=${encodeURIComponent(build.id)}">
   <link rel="stylesheet" href="${config.base}/assets/wiki-common.css?v=${encodeURIComponent(build.id)}">
   ${backgroundStyle}

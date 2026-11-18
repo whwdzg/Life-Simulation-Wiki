@@ -103,6 +103,8 @@ async function main() {
   if (!Array.isArray(search.entries) || search.entries.length === 0) problems.push('搜索索引为空')
   const previews = JSON.parse(await readFile(join(root, 'data', 'previews.json'), 'utf8').catch(() => '{"entries":[]}'))
   if (!Array.isArray(previews.entries) || previews.entries.length === 0) problems.push('链接预览索引为空')
+  const manifest = JSON.parse(await readFile(join(root, 'manifest.webmanifest'), 'utf8').catch(() => '{}'))
+  if (!manifest.start_url || !Array.isArray(manifest.icons) || manifest.icons.length < 2) problems.push('PWA manifest 不完整')
 
   const missingIndexes = ['pages', 'templates', 'media', 'categories', 'maps', 'discussions', 'recent', 'statistics', 'about', 'search']
   for (const path of missingIndexes) {

@@ -525,25 +525,92 @@ function setupMisc() {
    Legacy service worker cleanup
    -------------------------------------------------------------------------- */
 
-function setupLegacyServiceWorker() {
-  if (!('serviceWorker' in navigator)) return
-  navigator.serviceWorker
-    .getRegistrations()
-    .then(async (registrations) => {
-      let removed = false
-      for (const registration of registrations) {
-        const scriptUrl = registration.active?.scriptURL || registration.waiting?.scriptURL || registration.installing?.scriptURL || ''
-        if (scriptUrl.endsWith('/sw.js')) {
-          await registration.unregister().catch(() => {})
-          removed = true
+let deferredInstallPrompt = null
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault()
+  deferredInstallPrompt = event
+  document.dispatchEvent(new CustomEvent('pwa-install-ready'))
+})
+
+function setupPWA() {
+  const card = qs('[data-pwa-card]')
+  if (!card) return
+  const button = qs('[data-pwa-install]', card)
+  const status = qs('[data-pwa-status]', card)
+  const help = qs('[data-pwa-help]', card)
+  if (!button || !status) return
+
+  const standalone =
+    window.matchMedia?.('(display-mode: standalone)')?.matches === true || window.navigator.standalone === true
+  const isIOS =
+    /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+    (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1)
+  let dismissed = false
+
+  const setState = (label, message, disabled = false) => {
+    button.textContent = label
+    button.disabled = disabled
+    status.textContent = message
+  }
+
+  const update = () => {
+    if (standalone) {
+      setState('已安装', '当前正以独立应用模式运行，可从桌面或主屏幕直接打开。', true)
+      return
+    }
+    if (deferredInstallPrompt) {
+      setState('安装到设备', '浏览器已准备好安装，点击按钮即可添加到桌面或主屏幕。', false)
+      return
+    }
+    if (isIOS) {
+      setState('查看安装方法', 'iPhone / iPad：在 Safari 中点击分享按钮 → “添加到主屏幕”。', false)
+      return
+    }
+    if (dismissed) {
+      setState('查看安装方法', '安装已取消。可稍后从浏览器菜单选择“安装应用”。', false)
+      return
+    }
+    setState('查看安装方法', '在浏览器菜单中选择“安装应用”或“添加到主屏幕”；地址栏出现安装图标时也可直接点击。', false)
+  }
+
+  if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
+    navigator.serviceWorker.register(absolute('sw.js'), { scope: `${base}/` }).catch(() => {})
+  }
+
+  button.addEventListener('click', async () => {
+    if (deferredInstallPrompt) {
+      const prompt = deferredInstallPrompt
+      deferredInstallPrompt = null
+      button.disabled = true
+      status.textContent = '正在打开安装窗口…'
+      try {
+        await prompt.prompt()
+        const choice = await prompt.userChoice
+        if (choice.outcome === 'accepted') {
+          setState('正在安装…', '已接受安装请求，请等待浏览器完成安装。', true)
+        } else {
+          dismissed = true
+          update()
         }
+      } catch {
+        dismissed = true
+        update()
       }
-      if (removed && 'caches' in window) {
-        const keys = await caches.keys().catch(() => [])
-        await Promise.all(keys.map((key) => caches.delete(key).catch(() => false)))
-      }
-    })
-    .catch(() => {})
+      return
+    }
+    if (help) {
+      help.open = true
+      help.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  })
+
+  document.addEventListener('pwa-install-ready', update)
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null
+    setState('已安装', '安装成功，可以从桌面或主屏幕启动镜像。', true)
+  })
+  update()
+  window.setTimeout(update, 3000)
 }
 
 /* --------------------------------------------------------------------------
@@ -1046,7 +1113,7 @@ const start = () => {
   setupDiscussions()
   setupLinkPreviews()
   setupHistory()
-  setupLegacyServiceWorker()
+  setupPWA()
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)

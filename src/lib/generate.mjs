@@ -957,6 +957,33 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
   await cp(ASSETS_DIR, join(config.outDir, 'assets'), { recursive: true })
   await cp(join(ASSETS_DIR, 'sw.js'), join(config.outDir, 'sw.js'))
   await writeFile(join(config.outDir, 'assets', 'wiki-common.css'), `${wikiCss.trim()}\n`)
+  const manifest = {
+    id: `${config.base}/`,
+    name: '来福Simulation Wiki 镜像',
+    short_name: '来福 Wiki',
+    description: '来福Simulation Wiki 的离线静态镜像：条目、模板、媒体、地图与讨论版。',
+    lang: 'zh-CN',
+    dir: 'ltr',
+    start_url: `${config.base}/`,
+    scope: `${config.base}/`,
+    display: 'standalone',
+    display_override: ['window-controls-overlay', 'standalone'],
+    background_color: '#0f766e',
+    theme_color: '#0f766e',
+    orientation: 'any',
+    categories: ['reference', 'games', 'entertainment'],
+    prefer_related_applications: false,
+    icons: [
+      { src: `${config.base}/assets/icons/icon-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: `${config.base}/assets/icons/icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: `${config.base}/assets/icons/icon-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+    shortcuts: [
+      { name: '全部页面', short_name: '页面', url: `${config.base}/pages/`, icons: [{ src: `${config.base}/assets/icons/icon-192.png`, sizes: '192x192' }] },
+      { name: '站内搜索', short_name: '搜索', url: `${config.base}/search/`, icons: [{ src: `${config.base}/assets/icons/icon-192.png`, sizes: '192x192' }] },
+    ],
+  }
+  await writeFile(join(config.outDir, 'manifest.webmanifest'), `${JSON.stringify(manifest, null, 2)}\n`)
   await writeFile(join(config.outDir, '.nojekyll'), '')
 
   const stats = {

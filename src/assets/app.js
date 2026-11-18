@@ -29,20 +29,58 @@ const escapeHtml = (value) =>
 
 function setupTheme() {
   const button = qs('[data-theme-toggle]')
-  if (!button) return
-  button.addEventListener('click', () => {
-    const next = root.dataset.theme === 'dark' ? 'light' : 'dark'
-    root.dataset.theme = next
-    root.classList.toggle('theme-fandomdesktop-dark', next === 'dark')
-    try {
-      localStorage.setItem('wiki-theme', next)
-    } catch {
-      /* ignore */
+  const systemToggle = qs('[data-theme-system]')
+  const themeStatus = qs('[data-theme-status]')
+  const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+  let mode = ['system', 'light', 'dark'].includes(root.dataset.themeMode) ? root.dataset.themeMode : 'system'
+
+  const apply = (nextMode, { persist = true } = {}) => {
+    mode = nextMode
+    const theme = mode === 'system' ? (media?.matches ? 'dark' : 'light') : mode
+    root.dataset.themeMode = mode
+    root.dataset.theme = theme
+    root.classList.toggle('theme-fandomdesktop-dark', theme === 'dark')
+    if (systemToggle) systemToggle.checked = mode === 'system'
+    if (themeStatus) {
+      themeStatus.textContent =
+        mode === 'system' ? `跟随系统 · 当前${theme === 'dark' ? '深色' : '浅色'}` : `手动选择 · 当前${theme === 'dark' ? '深色' : '浅色'}`
     }
-    button.setAttribute('aria-label', next === 'dark' ? '切换到浅色主题' : '切换到深色主题')
+    if (button) {
+      button.setAttribute('aria-label', theme === 'dark' ? '切换到浅色主题' : '切换到深色主题')
+      button.title = theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'
+    }
+    if (persist) {
+      try {
+        localStorage.setItem('wiki-theme-mode', mode)
+        if (mode === 'system') localStorage.removeItem('wiki-theme')
+        else localStorage.setItem('wiki-theme', mode)
+      } catch {
+        /* ignore */
+      }
+    }
     window.dispatchEvent(new Event('wiki:theme'))
+  }
+
+  apply(mode, { persist: false })
+  try {
+    if (!localStorage.getItem('wiki-theme-mode')) localStorage.setItem('wiki-theme-mode', mode)
+  } catch {
+    /* ignore */
+  }
+
+  button?.addEventListener('click', () => {
+    apply(root.dataset.theme === 'dark' ? 'light' : 'dark')
   })
-  button.setAttribute('aria-label', root.dataset.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题')
+  systemToggle?.addEventListener('change', () => {
+    apply(systemToggle.checked ? 'system' : root.dataset.theme || 'light')
+  })
+  if (media) {
+    const onChange = () => {
+      if (mode === 'system') apply('system', { persist: false })
+    }
+    if (media.addEventListener) media.addEventListener('change', onChange)
+    else media.addListener?.(onChange)
+  }
 }
 
 /* --------------------------------------------------------------------------

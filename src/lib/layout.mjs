@@ -83,6 +83,14 @@ export function renderSidebar({ base, active, build, site, counts, toc, sidebarE
     <h2>导航</h2>
     <nav class="sidebar-nav" aria-label="站点导航">${nav}</nav>
   </section>
+  <section class="sidebar-block sidebar-theme">
+    <h2>外观</h2>
+    <label class="theme-switch" for="theme-system">
+      <span class="theme-switch__text"><strong>跟随系统</strong><small>深色 / 浅色自动切换</small></span>
+      <span class="switch"><input id="theme-system" type="checkbox" role="switch" data-theme-system checked><span class="switch__track" aria-hidden="true"></span></span>
+    </label>
+    <p class="theme-status" data-theme-status>跟随系统</p>
+  </section>
   ${toc ?? ''}
   ${sidebarExtra}
   <section class="sidebar-block sidebar-meta">
@@ -262,7 +270,6 @@ export function renderDocument({
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
   <title>${escapeHtml(fullTitle)}</title>
   <meta name="description" content="${escapeHtml(metaDescription)}">
@@ -282,7 +289,7 @@ export function renderDocument({
   <link rel="stylesheet" href="${config.base}/assets/wiki-common.css?v=${encodeURIComponent(build.id)}">
   ${backgroundStyle}
   ${headExtra}
-  <script>(function(){try{var t=localStorage.getItem('wiki-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;document.documentElement.classList.toggle('theme-fandomdesktop-dark',t==='dark');}catch(e){}})();</script>
+  <script>(function(){try{var mode=localStorage.getItem('wiki-theme-mode');if(mode!=='system'&&mode!=='light'&&mode!=='dark'){mode='system';}var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var theme=mode==='system'?(dark?'dark':'light'):mode;document.documentElement.dataset.themeMode=mode;document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('theme-fandomdesktop-dark',theme==='dark');}catch(e){}})();</script>
 </head>
 <body class="${escapeHtml(bodyClass)}">
   <a class="skip-link" href="#main">跳到正文</a>

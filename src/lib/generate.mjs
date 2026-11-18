@@ -1303,7 +1303,22 @@ ${failureDetails}
       redirect: Boolean(record.isRedirect),
     }))
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+  const previewEntries = records.map((record) => {
+    const image = String(record.contentHtml ?? '').match(/<img\b[^>]*\bsrc="([^"]+)"/i)?.[1] ?? ''
+    const thumbnail = image.includes('/media/') && record.kind !== 'map' ? image : ''
+    return {
+      url: pageUrl(record, config.base),
+      title: record.title,
+      ns: record.nsName,
+      summary: truncate(record.summary || '', 220),
+      thumbnail,
+    }
+  })
   await mkdir(join(config.outDir, 'data'), { recursive: true })
+  await writeFile(
+    join(config.outDir, 'data', 'previews.json'),
+    safeJson({ generatedAt: build.finishedAt, entries: previewEntries }),
+  )
   await writeFile(
     join(config.outDir, 'data', 'search.json'),
     safeJson({ generatedAt: build.finishedAt, entries: searchEntries }),

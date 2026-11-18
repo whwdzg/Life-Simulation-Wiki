@@ -705,6 +705,165 @@ function setupDiscussions() {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Internal link previews
+   -------------------------------------------------------------------------- */
+
+function setupLinkPreviews() {
+  if (!window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches) return
+  const links = qsa('.wiki-content a[href]').filter((link) => {
+    if (link.hasAttribute('data-lightbox') || link.hasAttribute('data-tab-link')) return false
+    if (link.target === '_blank') return false
+    try {
+      return new URL(link.href, window.location.href).origin === window.location.origin
+    } catch {
+      return false
+    }
+  })
+  if (!links.length) return
+
+  const card = document.createElement('a')
+  card.className = 'link-preview'
+  card.hidden = true
+  card.setAttribute('role', 'tooltip')
+  document.body.appendChild(card)
+
+  let previewPromise = null
+  let previewIndex = null
+  let showTimer = null
+  let hideTimer = null
+  let activeLink = null
+  let showToken = 0
+
+  const pathOf = (href) => {
+    try {
+      return new URL(href, window.location.href).pathname
+    } catch {
+      return ''
+    }
+  }
+
+  const loadIndex = () => {
+    if (!previewPromise) {
+      previewPromise = fetch(absolute('data/previews.json'), { credentials: 'same-origin' })
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          return response.json()
+        })
+        .then((data) => {
+          previewIndex = new Map((data.entries ?? []).map((entry) => [pathOf(entry.url), entry]))
+          return previewIndex
+        })
+        .catch((error) => {
+          previewPromise = null
+          throw error
+        })
+    }
+    return previewPromise
+  }
+
+  const hide = () => {
+    showToken += 1
+    window.clearTimeout(showTimer)
+    window.clearTimeout(hideTimer)
+    activeLink?.classList.remove('is-previewing')
+    activeLink = null
+    card.hidden = true
+    card.removeAttribute('href')
+  }
+
+  const scheduleHide = () => {
+    window.clearTimeout(showTimer)
+    window.clearTimeout(hideTimer)
+    hideTimer = window.setTimeout(hide, 180)
+  }
+
+  const position = (link) => {
+    card.style.left = '0px'
+    card.style.top = '0px'
+    card.hidden = false
+    const linkRect = link.getBoundingClientRect()
+    const cardRect = card.getBoundingClientRect()
+    const gap = 10
+    const above = linkRect.top - cardRect.height - gap >= 8
+    const preferredTop = above ? linkRect.top - cardRect.height - gap : linkRect.bottom + gap
+    const top = Math.max(8, Math.min(window.innerHeight - cardRect.height - 8, preferredTop))
+    const left = Math.max(10, Math.min(window.innerWidth - cardRect.width - 10, linkRect.left))
+    card.style.top = `${top}px`
+    card.style.left = `${left}px`
+    card.dataset.position = above ? 'above' : 'below'
+    const arrow = Math.min(cardRect.width - 24, Math.max(24, linkRect.left + linkRect.width / 2 - left))
+    card.style.setProperty('--arrow-left', `${arrow}px`)
+  }
+
+  const show = async (link) => {
+    window.clearTimeout(hideTimer)
+    const token = ++showToken
+    const path = pathOf(link.href)
+    if (!path || path === window.location.pathname) return
+    try {
+      const index = await loadIndex()
+      if (token !== showToken) return
+      const entry = index.get(path)
+      if (!entry) return
+      activeLink?.classList.remove('is-previewing')
+      activeLink = link
+      link.classList.add('is-previewing')
+      card.replaceChildren()
+      card.href = link.getAttribute('href')
+      if (entry.thumbnail) {
+        const image = document.createElement('img')
+        image.className = 'link-preview__thumb'
+        image.src = entry.thumbnail
+        image.alt = ''
+        image.loading = 'lazy'
+        card.appendChild(image)
+      }
+      const body = document.createElement('span')
+      body.className = 'link-preview__body'
+      const meta = document.createElement('span')
+      meta.className = 'link-preview__meta'
+      meta.textContent = entry.ns || '页面'
+      const title = document.createElement('strong')
+      title.className = 'link-preview__title'
+      title.textContent = entry.title
+      const summary = document.createElement('span')
+      summary.className = 'link-preview__summary'
+      summary.textContent = entry.summary || '此页面暂无摘要。'
+      const hint = document.createElement('span')
+      hint.className = 'link-preview__hint'
+      hint.textContent = '点击打开页面'
+      body.append(meta, title, summary, hint)
+      card.appendChild(body)
+      position(link)
+    } catch {
+      hide()
+    }
+  }
+
+  for (const link of links) {
+    link.addEventListener('mouseenter', () => {
+      window.clearTimeout(showTimer)
+      window.clearTimeout(hideTimer)
+      showTimer = window.setTimeout(() => show(link), 320)
+    })
+    link.addEventListener('mouseleave', scheduleHide)
+    link.addEventListener('focus', () => show(link))
+    link.addEventListener('blur', scheduleHide)
+  }
+
+  card.addEventListener('mouseenter', () => {
+    window.clearTimeout(hideTimer)
+    window.clearTimeout(showTimer)
+  })
+  card.addEventListener('mouseleave', scheduleHide)
+  window.addEventListener('scroll', hide, { passive: true, capture: true })
+  window.addEventListener('resize', hide)
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') hide()
+  })
+}
+
 const start = () => {
   setupTheme()
   setupInlineSurfaces()
@@ -721,6 +880,7 @@ const start = () => {
   setupMisc()
   setupMaps()
   setupDiscussions()
+  setupLinkPreviews()
   setupLegacyServiceWorker()
 }
 

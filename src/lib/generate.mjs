@@ -253,6 +253,12 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
   assignPagePaths(records, { homeKey: homeRecord.key })
   homeRecord = records.find((record) => record.key === homeRecord.key) ?? homeRecord
 
+  for (const record of records) {
+    record.history = record.history ?? []
+    record.historyPath = record.urlPath ? `${record.urlPath}/history` : 'history'
+    record.historyUrl = record.history.length ? `${config.base}/${record.historyPath}/` : ''
+  }
+
   const resolver = createLinkResolver({
     pages: records,
     projectName,
@@ -731,6 +737,80 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
 </article>`
   }
 
+  function renderHistory(record) {
+    const revisions = record.history ?? []
+    const data = revisions.map((revision) => ({
+      revid: revision.revid,
+      timestamp: revision.timestamp,
+      user: revision.user,
+      comment: revision.comment,
+      size: revision.size,
+      minor: revision.minor,
+      content: revision.content ?? '',
+    }))
+    const rows = revisions
+      .map((revision) => {
+        const current = revision.revid === record.revid
+        return `<li class="history-item" data-history-revision="${revision.revid}">
+  <label class="history-check"><input type="checkbox" value="${revision.revid}" aria-label="选择修订 ${revision.revid}"></label>
+  <div class="history-item__main">
+    <div class="history-item__title"><strong class="mono">r${revision.revid}</strong>${current ? ' <span class="badge badge--current">当前</span>' : ''} <time datetime="${escapeHtml(revision.timestamp)}">${formatDateTime(revision.timestamp)}</time>${revision.minor ? ' <span class="history-minor">小编辑</span>' : ''}</div>
+    <div class="history-item__meta">${escapeHtml(revision.user || '未知')} · ${formatBytes(revision.size)}${revision.comment ? ` · ${escapeHtml(revision.comment)}` : ''}</div>
+    <button class="history-source-button" type="button" data-history-source="${revision.revid}">查看源代码</button>
+  </div>
+</li>`
+      })
+      .join('')
+    const sourceHistory = `${record.sourceUrl}?action=history`
+    return `<p class="index-intro">共 ${formatNumber(revisions.length)} 个历史版本。勾选两个版本后点击“对比所选版本”；也可以查看任意版本的维基文本源代码。</p>
+<div class="history-toolbar">
+  <span class="history-selection" data-history-status>已选 0/2 个版本</span>
+  <button class="button" type="button" data-history-compare disabled>对比所选版本</button>
+  <a class="history-back" href="${pageUrl(record, config.base)}">返回条目</a>
+</div>
+<div class="history-layout">
+  <ol class="history-list" data-history-list>${rows}</ol>
+  <div class="history-view">
+    <div class="history-view__head" data-history-head>正在加载差异…</div>
+    <div class="diff-panel" data-history-diff><p class="comments-empty">正在加载差异…</p></div>
+    <details class="history-source-box">
+      <summary>所选版本源代码</summary>
+      <pre data-history-source-code>点击左侧“查看源代码”选择版本。</pre>
+    </details>
+  </div>
+</div>
+<script type="application/json" id="history-data">${safeJson({ title: record.title, revisions: data })}</script>
+<p class="history-source-link"><a href="${escapeHtml(sourceHistory)}" target="_blank" rel="noopener noreferrer">在原站查看完整历史</a></p>`
+  }
+
+  async function writeHistoryPage(record) {
+    const heading = `${record.title} · 历史版本`
+    const html = renderDocument({
+      config,
+      site,
+      build,
+      counts,
+      title: heading,
+      description: `查看 ${record.title} 的历史版本并对比差异。`,
+      active: ACTIVE_BY_KIND[record.kind] ?? '',
+      index: true,
+      headingHtml: escapeHtml(heading),
+      contentHtml: renderHistory(record),
+      breadcrumb: renderBreadcrumb(
+        [
+          { label: '首页', path: '' },
+          { label: '全部页面', path: 'pages' },
+          { label: record.title },
+          { label: '历史版本' },
+        ],
+        config.base,
+      ),
+      urlPath: record.historyPath,
+      headExtra: '<meta name="robots" content="noindex">',
+    })
+    await writePageHtml(record.historyPath, html)
+  }
+
   function renderDiscussions() {
     const threads = discussion.threads ?? []
     const threadCount = discussion.threadCount ?? threads.length
@@ -940,6 +1020,7 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
       headExtra: record.headExtra,
     })
     await writePageHtml(record.urlPath, html)
+    if (record.history.length) await writeHistoryPage(record)
   }
 
   // ---------------------------------------------------------------------

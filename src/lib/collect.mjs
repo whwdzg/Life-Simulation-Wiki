@@ -78,6 +78,30 @@ export async function collectWiki(config, { logger = createLogger('collect') } =
     page.wikitext = revision.content
   }
 
+  logger.info('读取历史版本…')
+  try {
+    const historyPages = await api.allRevisions()
+    const historyByKey = new Map()
+    let revisionCount = 0
+    for (const entry of historyPages) {
+      const key = titleKey(entry.title, { projectName })
+      const revisions = [...entry.revisions].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
+      historyByKey.set(key, [...(historyByKey.get(key) ?? []), ...revisions])
+      revisionCount += revisions.length
+    }
+    for (const [key, revisions] of historyByKey) {
+      const unique = new Map(revisions.map((revision) => [revision.revid, revision]))
+      historyByKey.set(key, [...unique.values()].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))))
+    }
+    for (const page of pageEntries) {
+      page.history = historyByKey.get(page.key) ?? []
+    }
+    logger.info(`  历史版本共 ${revisionCount} 个修订`)
+  } catch (error) {
+    logger.warn(`读取历史版本失败：${error.message}`)
+    for (const page of pageEntries) page.history = []
+  }
+
   let redirectCount = 0
   for (const page of pageEntries) {
     const redirect = parseRedirect(page.wikitext)

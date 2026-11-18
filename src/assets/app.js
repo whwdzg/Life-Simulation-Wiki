@@ -864,6 +864,170 @@ function setupLinkPreviews() {
   })
 }
 
+/* --------------------------------------------------------------------------
+   Revision history and line diffs
+   -------------------------------------------------------------------------- */
+
+function setupHistory() {
+  const dataElement = document.getElementById('history-data')
+  if (!dataElement) return
+  let payload
+  try {
+    payload = JSON.parse(dataElement.textContent || '{}')
+  } catch {
+    return
+  }
+  const revisions = payload.revisions ?? []
+  if (!revisions.length) return
+  const byId = new Map(revisions.map((revision) => [String(revision.revid), revision]))
+  const list = qs('[data-history-list]')
+  const diffPanel = qs('[data-history-diff]')
+  const diffHead = qs('[data-history-head]')
+  const status = qs('[data-history-status]')
+  const compareButton = qs('[data-history-compare]')
+  const sourceCode = qs('[data-history-source-code]')
+  const sourceBox = sourceCode?.closest('details')
+  if (!list || !diffPanel || !diffHead || !status || !compareButton) return
+
+  const checkboxes = qsa('input[type="checkbox"]', list)
+  const selected = new Set()
+
+  const dateText = (value) => {
+    const date = value instanceof Date ? value : new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    return date.toLocaleString('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+  }
+
+  const updateSelection = () => {
+    status.textContent = `已选 ${selected.size}/2 个版本`
+    compareButton.disabled = selected.size !== 2
+  }
+
+  const diffLines = (oldText, newText) => {
+    const oldLines = String(oldText ?? '').split('\n')
+    const newLines = String(newText ?? '').split('\n')
+    const n = oldLines.length
+    const m = newLines.length
+    if (n * m > 2_000_000) {
+      return [
+        ...oldLines.map((line, index) => ({ type: 'del', line, oldNo: index + 1 })),
+        ...newLines.map((line, index) => ({ type: 'add', line, newNo: index + 1 })),
+      ]
+    }
+    const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1))
+    for (let i = n - 1; i >= 0; i -= 1) {
+      for (let j = m - 1; j >= 0; j -= 1) {
+        dp[i][j] = oldLines[i] === newLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+      }
+    }
+    const ops = []
+    let i = 0
+    let j = 0
+    let oldNo = 1
+    let newNo = 1
+    while (i < n && j < m) {
+      if (oldLines[i] === newLines[j]) {
+        ops.push({ type: 'context', line: oldLines[i], oldNo, newNo })
+        i += 1
+        j += 1
+        oldNo += 1
+        newNo += 1
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        ops.push({ type: 'del', line: oldLines[i], oldNo })
+        i += 1
+        oldNo += 1
+      } else {
+        ops.push({ type: 'add', line: newLines[j], newNo })
+        j += 1
+        newNo += 1
+      }
+    }
+    while (i < n) {
+      ops.push({ type: 'del', line: oldLines[i], oldNo })
+      i += 1
+      oldNo += 1
+    }
+    while (j < m) {
+      ops.push({ type: 'add', line: newLines[j], newNo })
+      j += 1
+      newNo += 1
+    }
+    return ops
+  }
+
+  const renderDiff = () => {
+    if (selected.size !== 2) return
+    const chosen = [...selected]
+      .map((revid) => byId.get(revid))
+      .filter(Boolean)
+      .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)))
+    if (chosen.length !== 2) return
+    const [oldRevision, newRevision] = chosen
+    diffHead.textContent = `r${oldRevision.revid}（${dateText(oldRevision.timestamp)}） → r${newRevision.revid}（${dateText(newRevision.timestamp)}）`
+    const ops = diffLines(oldRevision.content, newRevision.content)
+    if (!ops.length) {
+      diffPanel.innerHTML = '<p class="comments-empty">两个版本内容相同。</p>'
+      return
+    }
+    const rows = ops
+      .map((op) => {
+        const marker = op.type === 'add' ? '+' : op.type === 'del' ? '−' : ''
+        return `<tr class="diff-${op.type}"><td class="diff-line-no">${op.oldNo ?? ''}</td><td class="diff-line-no">${op.newNo ?? ''}</td><td class="diff-marker">${marker}</td><td>${escapeHtml(op.line)}</td></tr>`
+      })
+      .join('')
+    diffPanel.innerHTML = `<table class="diff-table"><thead><tr><th class="diff-line-no">旧</th><th class="diff-line-no">新</th><th class="diff-marker"></th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    if (sourceCode) sourceCode.textContent = newRevision.content || '（空内容）'
+  }
+
+  for (const checkbox of checkboxes) {
+    if (selected.size < 2) {
+      checkbox.checked = true
+      selected.add(checkbox.value)
+    }
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        if (selected.size >= 2) {
+          const [oldest] = selected
+          selected.delete(oldest)
+          const oldCheckbox = checkboxes.find((item) => item.value === oldest)
+          if (oldCheckbox) oldCheckbox.checked = false
+        }
+        selected.add(checkbox.value)
+      } else {
+        selected.delete(checkbox.value)
+      }
+      updateSelection()
+      if (selected.size === 2) {
+        renderDiff()
+      } else {
+        diffHead.textContent = '请选择两个版本'
+        diffPanel.innerHTML = '<p class="comments-empty">请勾选两个版本进行对比。</p>'
+      }
+    })
+  }
+  updateSelection()
+  if (selected.size === 2) renderDiff()
+  else diffPanel.innerHTML = '<p class="comments-empty">请勾选两个版本进行对比。</p>'
+
+  compareButton.addEventListener('click', renderDiff)
+  for (const button of qsa('[data-history-source]', list)) {
+    button.addEventListener('click', () => {
+      const revision = byId.get(String(button.dataset.historySource))
+      if (!revision || !sourceCode) return
+      sourceCode.textContent = revision.content || '（空内容）'
+      if (sourceBox) sourceBox.open = true
+    })
+  }
+}
+
 const start = () => {
   setupTheme()
   setupInlineSurfaces()
@@ -881,6 +1045,7 @@ const start = () => {
   setupMaps()
   setupDiscussions()
   setupLinkPreviews()
+  setupHistory()
   setupLegacyServiceWorker()
 }
 

@@ -102,7 +102,7 @@ export function renderPageHead({ page, sourceUrl, badges = [] }) {
     ? `<p class="page-head__meta">最后编辑：<strong>${escapeHtml(page.user || '未知')}</strong> · <time datetime="${page.timestamp}">${formatDateTime(page.timestamp)}</time>${page.revid ? ` · <span class="mono">修订 ${escapeHtml(page.revid)}</span>` : ''}${page.comment ? ` · ${escapeHtml(page.comment)}` : ''}</p>`
     : ''
   return `<header class="page-head">
-  <div class="page-head__badges">${badgeHtml}${sourceUrl ? `<a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener noreferrer">原页面 ${icon('external', 'icon icon--small')}</a>` : ''}</div>
+  <div class="page-head__badges">${badgeHtml}<span class="page-head__links">${page?.historyUrl ? `<a class="source-link" href="${page.historyUrl}">历史版本</a>` : ''}${sourceUrl ? `<a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener noreferrer">原页面 ${icon('external', 'icon icon--small')}</a>` : ''}</span></div>
   <h1>${escapeHtml(page?.title ?? '')}</h1>
   ${meta}
 </header>`
@@ -147,8 +147,12 @@ export function renderHomeStatus({ build, stats, site }) {
 }
 
 export function renderPageFooter({ page, build, site, sourceUrl }) {
+  const history = page?.historyUrl
+    ? `<p class="page-footer__history"><a href="${page.historyUrl}">查看历史版本与对比</a></p>`
+    : ''
   return `<footer class="page-footer">
   <p>本页内容来自 <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">来福Simulation Wiki</a>，依 <a href="${site.licenseUrl}" target="_blank" rel="noopener noreferrer">${site.license}</a> 许可协议提供；本站为不提供编辑功能的静态镜像。</p>
+  ${history}
   <p class="page-footer__updated">镜像内容更新时间：<time datetime="${build.finishedAt}">${formatDateTime(build.finishedAt)}</time> <span class="mirror-status__utc">（${formatUtc(build.finishedAt)}）</span>${page?.revid ? ` · 本页修订 ${escapeHtml(page.revid)}` : ''}</p>
 </footer>`
 }

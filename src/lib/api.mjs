@@ -393,6 +393,40 @@ export class WikiApi {
     }
   }
 
+  async allRevisions() {
+    const pages = []
+    let continuation = {}
+    do {
+      const data = await this.request({
+        action: 'query',
+        list: 'allrevisions',
+        arvlimit: 'max',
+        arvprop: 'ids|timestamp|user|comment|size|flags|content',
+        arvslots: 'main',
+        ...continuation,
+      })
+      for (const entry of data.query?.allrevisions ?? []) {
+        pages.push({
+          pageid: entry.pageid,
+          ns: entry.ns,
+          title: entry.title,
+          revisions: (entry.revisions ?? []).map((revision) => ({
+            revid: revision.revid,
+            parentid: revision.parentid,
+            timestamp: revision.timestamp,
+            user: revision.user ?? '',
+            comment: revision.comment ?? '',
+            size: revision.size ?? 0,
+            minor: Boolean(revision.minor),
+            content: revision.slots?.main?.content ?? '',
+          })),
+        })
+      }
+      continuation = data.continue ?? null
+    } while (continuation)
+    return pages
+  }
+
   async recentChanges(limit = 50) {
     const data = await this.request({
       action: 'query',

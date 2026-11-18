@@ -4,17 +4,24 @@
 const CACHE = 'lifesim-wiki-pwa-v1'
 const CACHE_PREFIX = 'lifesim-wiki-pwa-'
 const scope = self.registration.scope
+const buildVersion = new URL(self.location.href).searchParams.get('v') || ''
 
-const assetPaths = [
-  '',
-  'assets/style.css',
-  'assets/app.js',
-  'assets/favicon.svg',
-  'assets/wiki-common.css',
-  'assets/icons/icon-192.png',
-  'assets/icons/icon-512.png',
-  'assets/icons/icon-maskable-512.png',
-  'manifest.webmanifest',
+const versionedAsset = (path) => {
+  const url = new URL(path, scope)
+  if (buildVersion) url.searchParams.set('v', buildVersion)
+  return url.href
+}
+
+const assetUrls = [
+  new URL('', scope).href,
+  versionedAsset('assets/style.css'),
+  versionedAsset('assets/app.js'),
+  versionedAsset('assets/wiki-common.css'),
+  new URL('assets/favicon.svg', scope).href,
+  new URL('assets/icons/icon-192.png', scope).href,
+  new URL('assets/icons/icon-512.png', scope).href,
+  new URL('assets/icons/icon-maskable-512.png', scope).href,
+  new URL('manifest.webmanifest', scope).href,
 ]
 
 const offlineHtml = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>离线 · 来福Simulation Wiki</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;color:#e2e8f0;font-family:system-ui,sans-serif;text-align:center;padding:24px}a{color:#5eead4}</style><main><h1>暂时离线</h1><p>这个页面还没有缓存。联网后重新打开即可，或先回到首页。</p><p><a href="${scope}">返回首页</a></p></main></html>`
@@ -24,9 +31,9 @@ self.addEventListener('install', (event) => {
     (async () => {
       const cache = await caches.open(CACHE)
       await Promise.all(
-        assetPaths.map(async (path) => {
+        assetUrls.map(async (url) => {
           try {
-            await cache.add(new Request(new URL(path, scope).href, { cache: 'reload' }))
+            await cache.add(new Request(url, { cache: 'reload' }))
           } catch {
             /* a missing optional asset should not abort installation */
           }
@@ -44,6 +51,15 @@ self.addEventListener('activate', (event) => {
       await Promise.all(
         keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE).map((key) => caches.delete(key)),
       )
+      const cache = await caches.open(CACHE)
+      const keep = new Set(assetUrls)
+      const managed = new Set(
+        ['assets/style.css', 'assets/app.js', 'assets/wiki-common.css'].map((path) => new URL(path, scope).pathname),
+      )
+      for (const request of await cache.keys()) {
+        const path = new URL(request.url).pathname
+        if (managed.has(path) && !keep.has(request.url)) await cache.delete(request)
+      }
       await self.clients.claim()
     })(),
   )

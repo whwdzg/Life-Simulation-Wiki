@@ -274,6 +274,8 @@ export function renderDocument({
   <title>${escapeHtml(fullTitle)}</title>
   <meta name="description" content="${escapeHtml(metaDescription)}">
   ${canonical ? `<link rel="canonical" href="${escapeHtml(canonical)}">` : ''}
+  ${page?.preloadImage ? `<link rel="preload" as="image" href="${escapeHtml(page.preloadImage)}" fetchpriority="high">` : ''}
+  ${!logo.startsWith('data:') && logo !== page?.preloadImage ? `<link rel="preload" as="image" href="${escapeHtml(logo)}" fetchpriority="high">` : ''}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="${escapeHtml(site.name)} 镜像站">
   <meta property="og:title" content="${escapeHtml(fullTitle)}">
@@ -287,6 +289,7 @@ export function renderDocument({
   <meta name="apple-mobile-web-app-title" content="来福 Wiki">
   <link rel="stylesheet" href="${config.base}/assets/style.css?v=${encodeURIComponent(build.id)}">
   <link rel="stylesheet" href="${config.base}/assets/wiki-common.css?v=${encodeURIComponent(build.id)}">
+  <link rel="preload" as="script" href="${config.base}/assets/app.js?v=${encodeURIComponent(build.id)}">
   ${backgroundStyle}
   ${headExtra}
   <script>(function(){try{var mode=localStorage.getItem('wiki-theme-mode');if(mode!=='system'&&mode!=='light'&&mode!=='dark'){mode='system';}var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var theme=mode==='system'?(dark?'dark':'light'):mode;document.documentElement.dataset.themeMode=mode;document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('theme-fandomdesktop-dark',theme==='dark');}catch(e){}})();</script>

@@ -188,6 +188,25 @@ function discussionContent(item) {
   }
 }
 
+function optimizeLeadImage(html) {
+  const start = html.search(/<img\b/i)
+  if (start < 0) return { html, preload: '' }
+  const end = html.indexOf('>', start)
+  if (end < 0) return { html, preload: '' }
+  const tag = html.slice(start, end + 1)
+  const src = tag.match(/\bsrc="([^"]+)"/i)?.[1] ?? ''
+  if (!src.includes('/media/')) return { html, preload: '' }
+  const width = Number(tag.match(/\bwidth="(\d+)"/i)?.[1] ?? 0)
+  let updated = tag
+  if (/\bloading="/i.test(updated)) updated = updated.replace(/\bloading="[^"]*"/i, 'loading="eager"')
+  else updated = updated.replace(/^<img/i, '<img loading="eager"')
+  if (!/\bfetchpriority="/i.test(updated)) updated = updated.replace(/^<img/i, '<img fetchpriority="high"')
+  return {
+    html: `${html.slice(0, start)}${updated}${html.slice(end + 1)}`,
+    preload: width >= 120 && !/\bsrcset=/i.test(tag) ? src : '',
+  }
+}
+
 function thumbUrlFor(image, width) {
   if (!image?.url) return null
   if (String(image.mime ?? '') === 'image/svg+xml') return image.url
@@ -930,6 +949,9 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     record.headExtra = result.headExtra
     record.summary = result.summary || `${record.nsName}页面`
     record.plainText = result.plainText || ''
+    const leadImage = optimizeLeadImage(record.contentHtml)
+    record.contentHtml = leadImage.html
+    record.preloadImage = leadImage.preload
     if (record.ns === 0 && !record.isRedirect) {
       const commentsHtml = renderComments(record)
       record.contentHtml += commentsHtml

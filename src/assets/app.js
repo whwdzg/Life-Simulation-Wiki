@@ -712,7 +712,9 @@ function setupPWA() {
   }
 
   if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
-    navigator.serviceWorker.register(absolute('sw.js'), { scope: `${base}/` }).catch(() => {})
+    const buildId = root.dataset.build
+    const workerUrl = `${absolute('sw.js')}${buildId ? `?v=${encodeURIComponent(buildId)}` : ''}`
+    navigator.serviceWorker.register(workerUrl, { scope: `${base}/` }).catch(() => {})
   }
 
   button.addEventListener('click', async () => {
@@ -1233,6 +1235,11 @@ function setupHistory() {
   }
 }
 
+const scheduleIdle = (callback) => {
+  if ('requestIdleCallback' in window) window.requestIdleCallback(callback, { timeout: 1200 })
+  else window.setTimeout(callback, 1)
+}
+
 const start = () => {
   setupTheme()
   setupInlineSurfaces()
@@ -1242,16 +1249,16 @@ const start = () => {
   setupTabbers()
   setupCollapsibles()
   setupTables()
-  setupStickyTableHeaders()
+  scheduleIdle(setupStickyTableHeaders)
   setupFilters()
   setupLightbox()
   setupTocSpy()
   setupBackToTop()
   setupMisc()
-  setupMaps()
-  setupDiscussions()
-  setupLinkPreviews()
-  setupHistory()
+  scheduleIdle(setupMaps)
+  scheduleIdle(setupDiscussions)
+  scheduleIdle(setupLinkPreviews)
+  scheduleIdle(setupHistory)
   setupPWA()
 }
 

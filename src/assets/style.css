@@ -2526,6 +2526,8 @@ html[data-theme="dark"] .freeze-ice {
   gap: 8px;
   padding: 9px 11px;
   border-bottom: 1px solid var(--border);
+  content-visibility: auto;
+  contain-intrinsic-size: 64px;
 }
 
 .history-item:last-child {

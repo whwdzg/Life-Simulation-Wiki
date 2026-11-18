@@ -28,6 +28,7 @@
   --code-bg: #f0f4f2;
   --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 18px rgba(15, 23, 42, 0.05);
+  --wiki-background-overlay: color-mix(in srgb, var(--bg) 88%, transparent);
   --radius: 14px;
   --radius-sm: 9px;
   --header-height: 64px;
@@ -61,6 +62,7 @@ html[data-theme="dark"] {
   --code-bg: #0c1728;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.2);
+  --wiki-background-overlay: color-mix(in srgb, var(--bg) 82%, transparent);
 }
 
 *,
@@ -77,9 +79,15 @@ html {
 
 body {
   margin: 0;
-  background:
+  background-color: var(--bg);
+  background-image:
     radial-gradient(1200px 500px at 100% -10%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%),
-    var(--bg);
+    linear-gradient(var(--wiki-background-overlay), var(--wiki-background-overlay)),
+    var(--wiki-background, none);
+  background-position: center top;
+  background-size: auto, auto, var(--wiki-background-size, auto);
+  background-repeat: no-repeat, no-repeat, var(--wiki-background-repeat, repeat);
+  background-attachment: scroll, fixed, fixed;
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 16px;
@@ -471,6 +479,11 @@ html[data-theme="dark"] .theme-toggle .icon:nth-child(2) {
 
 .main {
   min-width: 0;
+  padding: 22px 26px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 93%, transparent);
+  box-shadow: var(--shadow-soft);
 }
 
 .breadcrumb {
@@ -2266,6 +2279,11 @@ dialog::backdrop {
 
   body {
     overflow-x: hidden;
+    background-attachment: scroll, scroll, scroll;
+  }
+
+  .main {
+    padding: 16px 14px;
   }
 
   .wiki-content figure,

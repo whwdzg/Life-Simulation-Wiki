@@ -22,7 +22,7 @@
   </a>
 </p>
 
-<p align="center"><sub>镜像站首页 · 深色主题 · 截图于 2026-11-18（UTC+8）· 内容更新时间显示在首页底部和全站页脚</sub></p>
+<p align="center"><sub>镜像站首页 · 浅色主题与 <code>Site-background-light</code> 页面背景 · 截图于 2026-11-18（UTC+8）· 内容更新时间显示在首页底部和全站页脚</sub></p>
 
 ## 概览
 
@@ -45,6 +45,7 @@
 - **增量媒体缓存**：`.cache/media` 通过 `actions/cache` 持久化，并以媒体清单签名作为缓存键；媒体没有变化时不会重复下载约 120 MB 内容。
 - **完整的静态导航**：首页、全部页面、模板与模块、媒体库、分类、最近更新、同步统计、关于页面、404 和随机页面全部静态生成。
 - **站内搜索**：构建时生成 `data/search.json`，支持标题、摘要与正文搜索，键盘操作和移动端均可用。
+- **主题背景同步**：构建时读取源站 `Site-background-light` / `Site-background-dark`，浅色和深色主题分别使用对应背景图，并叠加半透明内容面板保证可读性。
 - **自适应与主题**：桌面/移动端响应式布局，支持浅色、深色主题并记住选择。
 - **失败回退**：单页或单个媒体抓取失败不会中断构建；页面会保留错误提示或原站链接，并在下一次整点重试。
 
@@ -54,7 +55,7 @@
   <img src="docs/screenshots/limitedshadow.png" alt="LimitedShadow 条目页：信息框、页签、彩虹字、弹跳字和剧透黑幕" width="90%">
 </p>
 
-<p align="center"><sub>条目页示例：Local Infobox、PageTabs、rainbow-text-hover、bounce-text、spoiler-blur 等模板效果</sub></p>
+<p align="center"><sub>条目页示例：页面背景 · Portable Infobox · PageTabs · rainbow-text-hover · bounce-text · spoiler-blur</sub></p>
 
 ## 工作方式
 
@@ -63,6 +64,7 @@ GitHub Actions（每小时整点）
   ├─ 读取 siteinfo / allpages / 最新修订 / 维基文本
   ├─ action=parse 渲染页面（模板、解析器函数在服务端展开）
   ├─ 读取 MediaWiki:Common.css / Wikia.css / Mobile.css
+  ├─ 读取 Site-background-light / Site-background-dark 背景图
   ├─ 收集图片、缩略图、音视频 URL 并下载到 .cache/media
   ├─ 改写站内链接与媒体链接，生成 dist/ 静态站
   ├─ 生成搜索索引、sitemap、404 与统计信息

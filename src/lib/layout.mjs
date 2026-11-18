@@ -222,6 +222,18 @@ export function renderDocument({
   const canonical = urlPath === null ? '' : `${config.origin}${config.base}/${encodedPath}${encodedPath ? '/' : ''}`
   const metaDescription = description || site.description
   const logo = site.logo || FALLBACK_LOGO
+  const backgroundRules = []
+  if (site.backgroundLight) {
+    backgroundRules.push(
+      `:root{--wiki-background:url("${escapeHtml(site.backgroundLight)}");--wiki-background-size:auto;--wiki-background-repeat:repeat;}`,
+    )
+  }
+  if (site.backgroundDark) {
+    backgroundRules.push(
+      `html[data-theme="dark"]{--wiki-background:url("${escapeHtml(site.backgroundDark)}");--wiki-background-size:cover;--wiki-background-repeat:no-repeat;}`,
+    )
+  }
+  const backgroundStyle = backgroundRules.length ? `<style>${backgroundRules.join('')}</style>` : ''
   return `<!doctype html>
 <html lang="${site.lang}" data-base="${escapeHtml(config.base)}" data-build="${escapeHtml(build.id)}">
 <head>
@@ -242,6 +254,7 @@ export function renderDocument({
   <link rel="apple-touch-icon" href="${logo}">
   <link rel="stylesheet" href="${config.base}/assets/style.css?v=${encodeURIComponent(build.id)}">
   <link rel="stylesheet" href="${config.base}/assets/wiki-common.css?v=${encodeURIComponent(build.id)}">
+  ${backgroundStyle}
   ${headExtra}
   <script>(function(){try{var t=localStorage.getItem('wiki-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;document.documentElement.classList.toggle('theme-fandomdesktop-dark',t==='dark');}catch(e){}})();</script>
 </head>

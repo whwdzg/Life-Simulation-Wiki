@@ -257,6 +257,10 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
   // Prefer the uploaded Site-logo / Site-favicon files when they exist.
   const resolvedLogo = (logoSource && media.urlFor(logoSource)) || null
   const resolvedFavicon = (faviconSource && media.urlFor(faviconSource)) || null
+  const backgroundLightImage = images.find((image) => /^Site-background-light(?:\.|$)/i.test(image.name))
+  const backgroundDarkImage = images.find((image) => /^Site-background-dark(?:\.|$)/i.test(image.name))
+  const backgroundLight = backgroundLightImage ? media.urlFor(backgroundLightImage.url) : null
+  const backgroundDark = backgroundDarkImage ? media.urlFor(backgroundDarkImage.url) : null
   build.finishedAt = new Date().toISOString()
   build.durationMs = Date.now() - startedAt
 
@@ -271,6 +275,8 @@ export async function generateSite({ config, data, buildStartedAt, logger = cons
     repository: SITE.repository,
     logo: resolvedLogo,
     favicon: resolvedFavicon,
+    backgroundLight,
+    backgroundDark,
   }
   if (!site.favicon) site.favicon = `${config.base}/assets/favicon.svg`
 

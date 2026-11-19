@@ -1,8 +1,8 @@
 /* 来福Simulation Wiki PWA service worker.
-   Pages use cache-first with a background refresh so repeat visits render
-   instantly; static assets use stale-while-revalidate. Previously visited
-   pages remain available offline. */
-const CACHE = 'lifesim-wiki-pwa-v1'
+   Pages use network-first so a new deployment is visible immediately; static
+   assets use stale-while-revalidate. Previously visited pages remain available
+   offline as a fallback. */
+const CACHE = 'lifesim-wiki-pwa-v2'
 const CACHE_PREFIX = 'lifesim-wiki-pwa-'
 const scope = self.registration.scope
 const buildVersion = new URL(self.location.href).searchParams.get('v') || ''
@@ -48,6 +48,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      const hadOldCache = await caches.has('lifesim-wiki-pwa-v1')
       const keys = await caches.keys()
       await Promise.all(
         keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE).map((key) => caches.delete(key)),
@@ -62,6 +63,10 @@ self.addEventListener('activate', (event) => {
         if (managed.has(path) && !keep.has(request.url)) await cache.delete(request)
       }
       await self.clients.claim()
+      if (hadOldCache) {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        await Promise.all(windows.map((client) => client.navigate(client.url).catch(() => {})))
+      }
     })(),
   )
 })
@@ -72,20 +77,19 @@ const offlineResponse = () =>
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   })
 
-const navigationFirst = async (request, event) => {
+const networkFirst = async (request) => {
   const cache = await caches.open(CACHE)
-  const cached = await cache.match(request)
-  const network = fetch(request)
-    .then(async (response) => {
-      if (response && response.ok) await cache.put(request, response.clone())
-      return response
-    })
-    .catch(() => null)
-  if (cached) {
-    event.waitUntil(network)
-    return cached
+  try {
+    const response = await fetch(request)
+    if (response && response.ok) await cache.put(request, response.clone())
+    return response
+  } catch {
+    return (
+      (await cache.match(request)) ||
+      (await cache.match(new URL('', scope).href)) ||
+      offlineResponse()
+    )
   }
-  return (await network) || (await cache.match(new URL('', scope).href)) || offlineResponse()
 }
 
 const staleWhileRevalidate = async (request) => {
@@ -112,7 +116,7 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.endsWith('/sw.js')) return
 
   if (request.mode === 'navigate') {
-    event.respondWith(navigationFirst(request, event))
+    event.respondWith(networkFirst(request))
     return
   }
 

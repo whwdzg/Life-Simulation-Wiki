@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    # 每小时整点（UTC）运行；GitHub 可能会延迟数分钟。
-    - cron: '0 * * * *'
+    # 每小时 :17（UTC）运行；避开整点高峰，GitHub 仍可能延迟。
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:

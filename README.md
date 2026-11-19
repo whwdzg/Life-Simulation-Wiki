@@ -31,7 +31,7 @@
 | 镜像范围 | 条目、用户、项目、文件、模板、分类、博客、模块、地图 |
 | 页面数量 | 约 451 页（随源站变化） |
 | 媒体文件 | 195 个原文件及页面缩略图，全部保存在本站 |
-| 更新频率 | 每小时整点（`0 * * * *`，UTC） |
+| 更新频率 | 每小时 :17（`17 * * * *`，UTC；GitHub 调度可能延迟） |
 | 构建部署 | GitHub Actions → GitHub Pages |
 | 搜索 | 浏览器本地全文搜索，无需第三方服务 |
 | 模板 | MediaWiki 服务端展开 + 源站自定义 CSS |
@@ -111,7 +111,7 @@
 ## 工作方式
 
 ```text
-GitHub Actions（每小时整点）
+GitHub Actions（每小时 :17）
   ├─ 读取 siteinfo / allpages / 最新修订 / 维基文本
   ├─ action=parse 渲染页面（模板、解析器函数在服务端展开）
   ├─ 解析 InteractiveMaps 地图、分类成员、页面评论与 Discussions 讨论版
@@ -173,7 +173,7 @@ npm run build
 1. 推送到 `main` 分支，或手动运行 **Actions → Build and deploy wiki mirror → Run workflow**。
 2. 首次使用时，在仓库 **Settings → Pages → Build and deployment** 中将 **Source** 设为 **GitHub Actions**。
 3. 工作流会读取 `actions/configure-pages` 的 `base_path` 和 `origin`，自动适配项目子路径（如 `https://<user>.github.io/Life-Simulation-Wiki/`）和自定义域名。
-4. 定时任务为 `0 * * * *`（UTC）。GitHub 的 schedule 可能延迟数分钟到数十分钟，这是平台行为；首页显示的是实际抓取完成时间。
+4. 定时任务为 `17 * * * *`（UTC）。GitHub 的 schedule 是最佳努力调度，可能延迟数十分钟甚至更久，这是平台行为；首页显示的是实际抓取完成时间。需要立即更新时，可手动运行 **Actions → Build and deploy wiki mirror → Run workflow**。
 
 当前线上地址：<https://whwdzg.github.io/Life-Simulation-Wiki/>
 

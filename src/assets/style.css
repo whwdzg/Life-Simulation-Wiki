@@ -263,6 +263,32 @@ a:hover {
   gap: 6px;
 }
 
+/* Installed PWA: use the page header as the window drag region, like a native
+   title bar, while keeping every control clickable. */
+@media (display-mode: standalone), (display-mode: window-controls-overlay) {
+  .site-header {
+    -webkit-app-region: drag;
+    app-region: drag;
+    user-select: none;
+  }
+
+  .site-header a,
+  .site-header button,
+  .site-header input,
+  .site-header select,
+  .site-header textarea,
+  .site-header [role="button"] {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}
+
+@media (display-mode: window-controls-overlay) {
+  .site-header__inner {
+    padding-right: max(24px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 12px));
+  }
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
